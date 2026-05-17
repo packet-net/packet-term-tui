@@ -30,13 +30,11 @@ A full-window AX.25 terminal application for connected-mode sessions over a KISS
 dotnet run --project src/Packet.Term -- --mycall M0LTE-1 --port /dev/ttyUSB0
 ```
 
-CLI flags:
-
 | Flag | Purpose |
 | --- | --- |
-| `--mycall <CALL-SSID>` | Your callsign + SSID. Required (prompted if omitted). |
-| `--port <path>` | Serial port path (e.g. `/dev/ttyUSB0`, `COM5`). Prompted if omitted. |
-| `--connect <CALL>` | Auto-connect to this callsign once the TUI is up. Optional. |
+| `--mycall <CALL-SSID>` | Your callsign + SSID. Prompted if omitted. |
+| `--port <path>` | Serial port (e.g. `/dev/ttyUSB0`, `COM5`). Prompted if omitted. |
+| `--connect <CALL>` | Auto-connect once the TUI is up. Optional. |
 
 If `--mycall` AND `--port` are both supplied, the run is treated as ephemeral — settings aren't persisted, so two parallel instances driven by their own flags can run side-by-side without racing on the shared settings file. Useful for connecting two modems on the same host to each other.
 
@@ -46,22 +44,34 @@ If `--mycall` AND `--port` are both supplied, the run is treated as ephemeral �
 | --- | --- |
 | `F2` | Connect... (modal callsign prompt) |
 | `F3` | Disconnect |
-| `Esc` | Quit (also `Ctrl-Q` or `File → Exit`) |
+| `Esc` (or `Ctrl-Q`) | Quit |
 | `F10` | Open menu bar |
 | `Ctrl-S` | Settings... (hot-swap MYCALL / port) |
 
 While connected, typing in the input line and pressing Enter sends one I-frame.
 
-## What it's built on
+## Built on
 
-Downstream consumer of the [Packet.NET libraries](https://github.com/m0lte/packet.net):
+Downstream consumer of the [Packet.NET libraries](https://github.com/m0lte/packet.net), all pulled from NuGet:
 
-- `Packet.Core` — shared primitives (Callsign, Ax25Address, KissFrame).
-- `Packet.Ax25` — AX.25 v2.2 frame codec + connected-mode session machine + `Ax25Listener` (inbound + outbound). Pulls `Packet.Ax25.Sdl` transitively from [m0lte/ax25sdl](https://github.com/m0lte/ax25sdl).
-- `Packet.Kiss` — KISS framing + ACKMODE + TCP transport.
+- [`Packet.Core`](https://www.nuget.org/packages/Packet.Core) — shared primitives.
+- [`Packet.Ax25`](https://www.nuget.org/packages/Packet.Ax25) — AX.25 v2.2 codec + session machine + `Ax25Listener`. Transitively pulls [`Packet.Ax25.Sdl`](https://www.nuget.org/packages/Packet.Ax25.Sdl) from [`m0lte/ax25sdl`](https://github.com/m0lte/ax25sdl).
+- [`Packet.Kiss`](https://www.nuget.org/packages/Packet.Kiss) — KISS framing + ACKMODE + transports.
 - `Terminal.Gui` v2 — Turbo Vision-style TUI framework.
 
-This repo was extracted from `m0lte/packet.net` on 2026-05-17 with history preserved via `git filter-repo`.
+## Provenance
+
+Extracted from `m0lte/packet.net` on 2026-05-17 (history preserved via `git filter-repo`) — the TUI used to live at `src/Packet.Term/` in that monorepo. Now an independent .NET application that consumes the Packet.* libraries from NuGet rather than living alongside them.
+
+## Sibling repos
+
+| Repo | What it is |
+| --- | --- |
+| **`m0lte/packet-term-tui`** *(here)* | C# Terminal.Gui v2 TUI |
+| [`m0lte/packet-term-web`](https://github.com/m0lte/packet-term-web) | Browser TNC2 emulator — same idea on the desktop, at https://packet-term.m0lte.uk |
+| [`m0lte/packet.net`](https://github.com/m0lte/packet.net) | .NET libraries (`Packet.Core` / `Packet.Ax25` / `Packet.Kiss`) — published to NuGet, consumed here |
+| [`m0lte/ax25sdl`](https://github.com/m0lte/ax25sdl) | SDL transcriptions + codegen — transitively consumed via `Packet.Ax25` → `Packet.Ax25.Sdl` |
+| [`m0lte/ax25-ts`](https://github.com/m0lte/ax25-ts) | TypeScript counterpart to `Packet.Ax25` — irrelevant to this app but part of the family |
 
 ## License
 
