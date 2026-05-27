@@ -12,6 +12,7 @@
     <PackageVersion Include="Packet.Core" Version="0.1.0" />
     <PackageVersion Include="Packet.Ax25" Version="0.1.0" />
     <PackageVersion Include="Packet.Kiss" Version="0.1.0" />
+    <PackageVersion Include="Packet.Ax25.Sdl" Version="0.6.0" />
 
     <!-- TUI runtime + CLI parsing + JSON-settings + serial. -->
     <PackageVersion Include="Terminal.Gui" Version="2.1.0" />
