@@ -7,12 +7,11 @@
 
   <ItemGroup>
     <!-- Packet.NET libraries — consumed from m0lte/packet.net as NuGet
-         packages since 2026-05-17 (lib-v0.1.0 release). Packet.Ax25 brings
-         Packet.Ax25.Sdl transitively (which itself comes from m0lte/ax25sdl). -->
-    <PackageVersion Include="Packet.Core" Version="0.1.0" />
-    <PackageVersion Include="Packet.Ax25" Version="0.1.0" />
-    <PackageVersion Include="Packet.Kiss" Version="0.1.0" />
-    <PackageVersion Include="Packet.Ax25.Sdl" Version="0.6.0" />
+         packages since 2026-05-17. Packet.Ax25 brings Packet.Ax25.Sdl
+         transitively (which itself comes from m0lte/ax25sdl). -->
+    <PackageVersion Include="Packet.Core" Version="0.1.1" />
+    <PackageVersion Include="Packet.Ax25" Version="0.1.1" />
+    <PackageVersion Include="Packet.Kiss" Version="0.1.1" />
 
     <!-- TUI runtime + CLI parsing + JSON-settings + serial. -->
     <PackageVersion Include="Terminal.Gui" Version="2.1.0" />
