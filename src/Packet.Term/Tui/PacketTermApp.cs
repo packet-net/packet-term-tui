@@ -1,4 +1,5 @@
 using Packet.Core;
+using Packet.Kiss.Serial;
 using Terminal.Gui.App;
 
 namespace Packet.Term.Tui;

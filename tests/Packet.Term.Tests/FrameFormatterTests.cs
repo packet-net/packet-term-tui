@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using Packet.Ax25;
 using Packet.Core;
@@ -15,6 +16,12 @@ public class FrameFormatterTests
     private static readonly DateTimeOffset FixedTs =
         new(2026, 5, 16, 12, 34, 56, TimeSpan.Zero);
 
+    // The formatter renders the timestamp in local time, so the expected
+    // prefix is derived the same way — keeps the assertions correct
+    // regardless of the test machine's timezone.
+    private static readonly string T =
+        FixedTs.LocalDateTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+
     private static readonly Callsign Me = new("M0LTE", 1);
     private static readonly Callsign Peer = new("G1AAA", 0);
 
@@ -24,7 +31,7 @@ public class FrameFormatterTests
         // Three bytes that obviously aren't an AX.25 frame.
         var line = FrameFormatter.Format(FrameDirection.Receive, new byte[] { 0xAA, 0xBB, 0xCC }, FixedTs);
         line.Should().Contain("<undecodable 3B>");
-        line.Should().StartWith("12:34:56 R");
+        line.Should().StartWith($"{T} R");
     }
 
     [Fact]
@@ -33,7 +40,7 @@ public class FrameFormatterTests
         // SABM command, P=1, dest=Peer (we're calling them), source=Me.
         var sabm = BuildUFrame(dest: Peer, source: Me, uBase: 0x2F, pollFinal: true, isCommand: true);
         var line = FrameFormatter.Format(FrameDirection.Transmit, sabm, FixedTs);
-        line.Should().Be("12:34:56 T M0LTE-1>G1AAA <SABM C P>");
+        line.Should().Be($"{T} T M0LTE-1>G1AAA <SABM C P>");
     }
 
     [Fact]
@@ -41,7 +48,7 @@ public class FrameFormatterTests
     {
         var ua = BuildUFrame(dest: Me, source: Peer, uBase: 0x63, pollFinal: true, isCommand: false);
         var line = FrameFormatter.Format(FrameDirection.Receive, ua, FixedTs);
-        line.Should().Be("12:34:56 R G1AAA>M0LTE-1 <UA R F>");
+        line.Should().Be($"{T} R G1AAA>M0LTE-1 <UA R F>");
     }
 
     [Fact]
@@ -49,7 +56,7 @@ public class FrameFormatterTests
     {
         var disc = BuildUFrame(dest: Peer, source: Me, uBase: 0x43, pollFinal: true, isCommand: true);
         var line = FrameFormatter.Format(FrameDirection.Transmit, disc, FixedTs);
-        line.Should().Be("12:34:56 T M0LTE-1>G1AAA <DISC C P>");
+        line.Should().Be($"{T} T M0LTE-1>G1AAA <DISC C P>");
     }
 
     [Fact]
@@ -57,7 +64,7 @@ public class FrameFormatterTests
     {
         var dm = BuildUFrame(dest: Me, source: Peer, uBase: 0x0F, pollFinal: false, isCommand: false);
         var line = FrameFormatter.Format(FrameDirection.Receive, dm, FixedTs);
-        line.Should().Be("12:34:56 R G1AAA>M0LTE-1 <DM R>");
+        line.Should().Be($"{T} R G1AAA>M0LTE-1 <DM R>");
     }
 
     [Fact]
@@ -66,7 +73,7 @@ public class FrameFormatterTests
         // RR response, N(R)=3, F=1. Control byte: NR(7-5) | 0 | F | 0001 = 011 0 1 0001 = 0x71.
         var rr = BuildSFrame(dest: Me, source: Peer, sBase: 0x01, nr: 3, pollFinal: true, isCommand: false);
         var line = FrameFormatter.Format(FrameDirection.Receive, rr, FixedTs);
-        line.Should().Be("12:34:56 R G1AAA>M0LTE-1 <RR R R3 F>");
+        line.Should().Be($"{T} R G1AAA>M0LTE-1 <RR R R3 F>");
     }
 
     [Fact]
@@ -77,7 +84,7 @@ public class FrameFormatterTests
         var info = Encoding.ASCII.GetBytes("hello\r");
         var i = BuildIFrame(dest: Peer, source: Me, ns: 1, nr: 2, pollFinal: true, info: info);
         var line = FrameFormatter.Format(FrameDirection.Transmit, i, FixedTs);
-        line.Should().Contain("12:34:56 T M0LTE-1>G1AAA <I C R2 S1 P>");
+        line.Should().Contain($"{T} T M0LTE-1>G1AAA <I C R2 S1 P>");
         // Info field shown on next line, indented, trailing CR stripped.
         line.Should().Contain("\n    hello");
     }

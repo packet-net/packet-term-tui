@@ -1,6 +1,7 @@
 using System.IO.Ports;
 using CommandLine;
 using Packet.Core;
+using Packet.Kiss.Serial;
 using Packet.Term.Tui;
 
 namespace Packet.Term;

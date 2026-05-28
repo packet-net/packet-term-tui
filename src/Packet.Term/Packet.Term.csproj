@@ -26,6 +26,7 @@
     <PackageReference Include="Packet.Core" />
     <PackageReference Include="Packet.Ax25" />
     <PackageReference Include="Packet.Kiss" />
+    <PackageReference Include="Packet.Kiss.Serial" />
   </ItemGroup>
 
 </Project>

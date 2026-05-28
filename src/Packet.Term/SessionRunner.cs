@@ -1,5 +1,6 @@
 using Packet.Ax25.Session;
 using Packet.Core;
+using Packet.Kiss.Serial;
 
 namespace Packet.Term;
 

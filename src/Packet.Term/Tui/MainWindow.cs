@@ -3,6 +3,7 @@ using System.Text;
 using Packet.Ax25;
 using Packet.Ax25.Session;
 using Packet.Core;
+using Packet.Kiss.Serial;
 using Terminal.Gui.App;
 using Terminal.Gui.Drawing;
 using Terminal.Gui.Input;
