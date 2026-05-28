@@ -8,6 +8,9 @@
     <NoWarn>$(NoWarn);CA1711;CA1303;CA2007</NoWarn>
     <RootNamespace>Packet.Term</RootNamespace>
     <AssemblyName>Packet.Term</AssemblyName>
+    <!-- Baseline version for local/dev builds; the release workflow
+         overrides this with -p:Version from the git tag. -->
+    <Version>0.2.0</Version>
   </PropertyGroup>
 
   <ItemGroup>

@@ -21,6 +21,12 @@ public static class Program
 {
     public static int Main(string[] args)
     {
+        if (args.Contains("--version") || args.Contains("-V"))
+        {
+            Console.WriteLine(AppInfo.VersionReport());
+            return 0;
+        }
+
         var parsed = Parser.Default.ParseArguments<CommandLineOptions>(args);
         if (parsed is not CommandLine.Parsed<CommandLineOptions> ok)
         {
