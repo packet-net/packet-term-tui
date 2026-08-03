@@ -9,15 +9,18 @@
     <!-- Packet.NET libraries — consumed from m0lte/packet.net as NuGet
          packages since 2026-05-17. Packet.Ax25 brings Packet.Ax25.Sdl
          transitively (which itself comes from m0lte/ax25sdl). -->
-    <PackageVersion Include="Packet.Core" Version="0.24.0" />
-    <PackageVersion Include="Packet.Ax25" Version="0.24.0" />
-    <PackageVersion Include="Packet.Kiss" Version="0.24.0" />
-    <PackageVersion Include="Packet.Kiss.Serial" Version="0.24.0" />
+    <PackageVersion Include="Packet.Core" Version="0.25.0" />
+    <PackageVersion Include="Packet.Ax25" Version="0.25.0" />
+    <PackageVersion Include="Packet.Kiss" Version="0.25.0" />
+    <PackageVersion Include="Packet.Kiss.Serial" Version="0.25.0" />
 
     <!-- TUI runtime + CLI parsing + JSON-settings + serial. -->
     <PackageVersion Include="Terminal.Gui" Version="2.1.0" />
     <PackageVersion Include="CommandLineParser" Version="2.9.1" />
-    <PackageVersion Include="System.IO.Ports" Version="10.0.0" />
+    <!-- 10.0.10, not 10.0.0: Packet.Kiss.Serial 0.25.0 floors System.IO.Ports at
+         >= 10.0.10 (packet.net bumped its .NET 10 servicing set on 2026-08-03), and
+         CPM turns a lower central pin into an NU1109 downgrade error. -->
+    <PackageVersion Include="System.IO.Ports" Version="10.0.10" />
     <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.0" />
