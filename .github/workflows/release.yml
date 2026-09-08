@@ -12,6 +12,16 @@ on:
       tag:
         description: 'Tag to build & release (e.g. v0.2.0)'
         required: true
+  # Called by deps.yml after a green weekly dependency bump. Calling it directly
+  # (rather than relying on the pushed tag to fire the `push` trigger above) is
+  # deliberate: pushes made with GITHUB_TOKEN do not start new workflow runs, so
+  # the tag alone would never produce a release.
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Tag to build & release (e.g. v0.2.0)'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -22,16 +32,27 @@ env:
 jobs:
   release:
     name: build + release
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-
       - name: Resolve tag
         id: tag
         run: |
-          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          set -euo pipefail
+          TAG="${{ inputs.tag || github.ref_name }}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      # Check out the tag, not the branch head. On the `push` trigger these are
+      # the same thing, but when dispatched by hand or called by deps.yml an
+      # unpinned checkout would take the default branch and could build
+      # something other than what the tag actually points at.
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.tag.outputs.tag }}
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
 
       - name: Build single-file binaries
         run: |

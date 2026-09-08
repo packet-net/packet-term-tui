@@ -20,9 +20,12 @@ env:
 jobs:
   build-test:
     name: build + test
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
       - name: dotnet --version
         run: dotnet --version
       - name: build

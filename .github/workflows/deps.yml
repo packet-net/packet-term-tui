@@ -1,0 +1,252 @@
+name: deps
+
+# Weekly Packet.NET dependency sweep.
+#
+# Checks nuget.org for newer stable releases of our own libraries — the Packet.*
+# and M0lte.* packages (m0lte/packet.net, and m0lte/ax25sdl underneath it). If
+# anything moved, it bumps Directory.Packages.props, builds and tests, and only if
+# that is green does it commit to main, tag the next patch version, and hand off
+# to release.yml to cut the GitHub Release.
+#
+# Deliberately scoped to those two prefixes. Third-party pins (Terminal.Gui,
+# xunit, Microsoft.Extensions.*, ...) are left alone — they don't justify a
+# Packet.Term release on their own, and at least one of them is an outright
+# breaking change: Terminal.Gui 2.2+ obsoletes TextView in favour of
+# tui-cs/Editor's EditorView, which with TreatWarningsAsErrors=true turns the four
+# TextView uses in Tui/MainWindow.cs into build errors. Bump those by hand, when
+# you're ready to do the porting work that comes with them.
+#
+# If the build or tests fail against a new release, nothing is committed
+# and an issue is opened instead.
+
+on:
+  schedule:
+    # Mondays, 07:17 UTC. Off the hour on purpose — the top of the hour is when
+    # GitHub's scheduler is most congested and queues cron runs.
+    - cron: '17 7 * * 1'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Check + build + test, but do not commit, tag or release'
+        type: boolean
+        default: false
+
+# Never let two sweeps race to tag the same version.
+concurrency:
+  group: deps
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  bump:
+    name: check + bump our libraries
+    runs-on: ubuntu-latest
+    outputs:
+      # Empty unless a bump was committed and tagged. Gates the release job.
+      tag: ${{ steps.commit.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Full history + tags: we derive the next release version from the
+          # highest existing v* tag.
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Check nuget.org for newer releases of our libraries
+        id: check
+        run: |
+          set -euo pipefail
+          PROPS=Directory.Packages.props
+
+          # Every Packet.* / M0lte.* package pinned centrally. Matched
+          # case-insensitively so a differently-cased package id still gets
+          # picked up. Packet.Ax25.Sdl is deliberately not in that file — it
+          # comes in transitively via Packet.Ax25 and must not become a direct
+          # dependency (see CLAUDE.md), so it rides along with the Packet.Ax25
+          # bump. Nothing here ever *adds* a pin; it only moves ones you already
+          # have.
+          pkgs=$(grep -oiE 'Include="(Packet|M0lte)\.[A-Za-z0-9.]+"' "$PROPS" \
+                 | sed 's/[Ii]nclude="//; s/"$//' | sort -u)
+
+          if [ -z "$pkgs" ]; then
+            echo "::error::no Packet.* or M0lte.* pins found in $PROPS"
+            exit 1
+          fi
+
+          summary=""
+          prefixes=""
+          seen=""
+          for pkg in $pkgs; do
+            cur=$(grep -oE "Include=\"${pkg}\" Version=\"[^\"]+\"" "$PROPS" \
+                  | sed 's/.*Version="//; s/"$//')
+
+            # The flat-container index lists versions ascending by SemVer, so the
+            # last plain x.y.z entry is the latest stable. Filtering to x.y.z also
+            # drops prereleases, which we never want to ship a release from.
+            lower=$(echo "$pkg" | tr '[:upper:]' '[:lower:]')
+            latest=$(curl -sSf --retry 3 --retry-delay 5 \
+                       "https://api.nuget.org/v3-flatcontainer/${lower}/index.json" \
+                     | tr ',' '\n' | tr -d '"[]{} ' | sed 's/^versions://' \
+                     | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | tail -1)
+
+            if [ -z "$latest" ]; then
+              echo "::error::could not resolve a stable version for $pkg"
+              exit 1
+            fi
+
+            if [ "$cur" = "$latest" ]; then
+              echo "$pkg $cur (current)"
+              continue
+            fi
+
+            echo "$pkg $cur -> $latest"
+            sed -i "s|Include=\"${pkg}\" Version=\"${cur}\"|Include=\"${pkg}\" Version=\"${latest}\"|" "$PROPS"
+            summary="${summary}${pkg} ${cur} -> ${latest}"$'\n'
+
+            # Track which families actually moved, so the commit subject names
+            # them rather than always claiming it was Packet.*. Dedupe against a
+            # space-separated list of bare family names: the display list is
+            # comma-joined, and matching " Packet.* " against "Packet.*, M0lte.*"
+            # would miss and duplicate.
+            family=${pkg%%.*}
+            case " $seen " in
+              *" $family "*) ;;
+              *) seen="${seen}${seen:+ }${family}"
+                 prefixes="${prefixes}${prefixes:+, }${family}.*" ;;
+            esac
+          done
+
+          if [ -z "$summary" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "### Our libraries are already up to date" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "prefixes=$prefixes" >> "$GITHUB_OUTPUT"
+          {
+            echo "summary<<EOF"
+            printf '%s' "$summary"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### ${prefixes} updates found"
+            echo '```'
+            printf '%s' "$summary"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: dotnet --version
+        if: steps.check.outputs.changed == 'true'
+        run: dotnet --version
+
+      - name: build
+        if: steps.check.outputs.changed == 'true'
+        run: dotnet build --nologo
+
+      - name: test
+        if: steps.check.outputs.changed == 'true'
+        run: dotnet test --nologo --no-build
+
+      - name: Commit and tag
+        id: commit
+        if: steps.check.outputs.changed == 'true' && inputs.dry_run != true
+        run: |
+          set -euo pipefail
+
+          # Next patch after the highest existing v* tag. sort -V gives us
+          # numeric-aware ordering, so v0.2.9 sorts below v0.2.10.
+          last=$(git tag -l 'v*' | sed 's/^v//' \
+                 | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+          if [ -z "$last" ]; then
+            echo "::error::no existing v* tag to derive the next version from"
+            exit 1
+          fi
+          major=${last%%.*}
+          rest=${last#*.}
+          minor=${rest%%.*}
+          patch=${rest#*.}
+          tag="v${major}.${minor}.$((patch + 1))"
+          echo "releasing $tag (previous $last)"
+
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+
+          git add Directory.Packages.props
+          git commit -F - <<EOF
+          chore(deps): bump ${{ steps.check.outputs.prefixes }} for ${tag}
+
+          Weekly automated sweep of our own libraries on nuget.org.
+
+          ${{ steps.check.outputs.summary }}
+          Build and tests were green against these versions before this commit
+          was made.
+          EOF
+
+          # main requires linear history, so rebase rather than merge if the
+          # branch moved under us between checkout and push.
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+          git tag -a "$tag" -m "Packet.Term $tag"
+          git push origin "$tag"
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Committed and tagged **$tag**" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Note dry run
+        if: steps.check.outputs.changed == 'true' && inputs.dry_run == true
+        run: echo "Dry run — updates found and verified, nothing committed." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open an issue on failure
+        # Scheduled runs have nobody watching them, so surface a broken bump as
+        # an issue. One open issue at a time; a second failure while the first is
+        # still open just adds a comment.
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh label create deps --color ededed --description 'Dependency maintenance' 2>/dev/null || true
+
+          # Match on the title locally rather than via `--search`: GitHub's issue
+          # search index lags issue creation by a while, so a search-based check
+          # would not see last week's issue and would open a duplicate.
+          existing=$(gh issue list --label deps --state open --limit 100 \
+                     --json number,title \
+                     --jq 'map(select(.title == "weekly dependency bump failed")) | .[0].number // empty')
+
+          body="The weekly dependency sweep failed. Nothing was committed, tagged or released.
+
+          Run: ${RUN_URL}
+
+          Usually this means a new Packet.*/M0lte.* release needs a code change here (a
+          breaking API change, or a raised transitive floor that trips NU1109
+          under central package management)."
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title 'weekly dependency bump failed' --label deps --body "$body"
+          fi
+
+  release:
+    name: release
+    needs: bump
+    if: needs.bump.outputs.tag != ''
+    uses: ./.github/workflows/release.yml
+    permissions:
+      contents: write
+    with:
+      tag: ${{ needs.bump.outputs.tag }}
