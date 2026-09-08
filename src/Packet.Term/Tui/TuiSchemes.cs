@@ -72,7 +72,10 @@ internal static class TuiSchemes
         // line feel. Disabled state stays muted.
         var normal = new TguiAttribute(Color.BrightYellow, Color.Blue);
         var focus = new TguiAttribute(Color.White, Color.Blue);
-        return Build(normal, focus);
+        // The input line really is read-only while disconnected, so unlike
+        // the display panes it SHOULD look inert then — muted, but still on
+        // the blue bed so the line doesn't vanish.
+        return Build(normal, focus, readOnly: new TguiAttribute(Color.Gray, Color.Blue));
     }
 
     private static Scheme BuildStatus()
@@ -83,17 +86,28 @@ internal static class TuiSchemes
         return Build(normal, focus);
     }
 
-    private static Scheme Build(TguiAttribute normal, TguiAttribute focus)
+    private static Scheme Build(TguiAttribute normal, TguiAttribute focus, TguiAttribute? readOnly = null)
     {
         // VisualRole drives how the scheme renders in different states.
         // We initialise all reasonable roles so an unusual draw call
         // doesn't fall through to a parent scheme.
+        //
+        // Editable / ReadOnly are the two that MUST be spelled out here:
+        // TextView and TextField paint their content with those roles, not
+        // with Normal, and a role left unset is *derived* by Terminal.Gui
+        // rather than inherited. The derivation from White-on-Black lands
+        // on Gray-on-Gray — which is how the conversation pane spent its
+        // life rendering white text invisibly on a grey block. Both panes
+        // are read-only by design (they're displays, not fields), so their
+        // read-only look is simply their normal look.
         return new Scheme(normal)
         {
             Normal = normal,
             Focus = focus,
             HotNormal = normal,
             HotFocus = focus,
+            Editable = normal,
+            ReadOnly = readOnly ?? normal,
             Disabled = new TguiAttribute(Color.DarkGray, Color.Black),
         };
     }
