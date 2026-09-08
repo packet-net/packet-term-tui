@@ -2,8 +2,8 @@ using System.Globalization;
 using System.Text;
 using Packet.Ax25;
 using Packet.Ax25.Session;
+using Packet.Ax25.Transport;
 using Packet.Core;
-using Packet.Kiss.Serial;
 using Terminal.Gui.App;
 using Terminal.Gui.Drawing;
 using Terminal.Gui.Input;
@@ -35,13 +35,14 @@ internal sealed class MainWindow : Window
 {
     private const int FrameLogCapacity = 200;
     private const int ChatLogCapacity = 200;
+    private const int InputHistoryCapacity = 100;
 
     private readonly IApplication app;
-    // myCall / portName / modem / runner are mutable so the Settings dialog
+    // myCall / endpoint / modem / runner are mutable so the Settings dialog
     // can hot-swap them at runtime — see ReconfigureAsync.
     private Callsign myCall;
-    private string portName;
-    private KissSerialModem modem;
+    private ModemEndpoint endpoint;
+    private IAx25Transport modem;
     private SessionRunner runner;
     // Not `readonly`: the View → "Clear ..." menu commands swap in a fresh
     // buffer rather than touching RingBuffer's internals (kept as-is per
@@ -57,6 +58,14 @@ internal sealed class MainWindow : Window
     private readonly Shortcut statusLink;
     private readonly MenuItem acceptIncomingMenuItem;
 
+    // Sent-line history for the input field, oldest first. historyIndex ==
+    // inputHistory.Count means "the line currently being typed", which is
+    // where the cursor sits until Up walks back into the history;
+    // historyDraft parks that half-typed line so Down can return to it.
+    private readonly List<string> inputHistory = [];
+    private int historyIndex;
+    private string historyDraft = string.Empty;
+
     private LinkState linkState = LinkState.Disconnected;
     private Callsign? remote;
     private CancellationTokenSource? runnerCts;
@@ -64,14 +73,14 @@ internal sealed class MainWindow : Window
     private bool acceptIncoming = true;
     private bool disposed;
 
-    public MainWindow(IApplication app, Callsign myCall, string portName, KissSerialModem modem)
+    public MainWindow(IApplication app, Callsign myCall, ModemEndpoint endpoint, IAx25Transport modem)
     {
         this.app = app ?? throw new ArgumentNullException(nameof(app));
         this.myCall = myCall;
-        this.portName = portName ?? throw new ArgumentNullException(nameof(portName));
+        this.endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
         this.modem = modem ?? throw new ArgumentNullException(nameof(modem));
 
-        Title = $"Packet.Term {AppInfo.Version}  —  MYCALL {FormatCallsign(myCall)}  port {portName} @ 57600";
+        Title = $"Packet.Term {AppInfo.Version}  —  MYCALL {FormatCallsign(myCall)}  {endpoint.Description}";
         BorderStyle = LineStyle.None;
 
         // ─── MenuBar ──────────────────────────────────────────────────
@@ -94,7 +103,11 @@ internal sealed class MainWindow : Window
             Height = Dim.Fill(),
             ReadOnly = true,
             Multiline = true,
-            WordWrap = false,
+            // Wrapped, not clipped: neither pane can be focused, so there
+            // is no way to scroll sideways to reach whatever a clipped
+            // line hid. Trace headers are short enough that only long
+            // payload rows wrap.
+            WordWrap = true,
             CanFocus = false,
         };
         monitorView.SchemeName = TuiSchemes.Monitor;
@@ -119,7 +132,7 @@ internal sealed class MainWindow : Window
             Height = Dim.Fill(),
             ReadOnly = true,
             Multiline = true,
-            WordWrap = false,
+            WordWrap = true,
             CanFocus = false,
         };
         chatView.SchemeName = TuiSchemes.Chat;
@@ -137,6 +150,7 @@ internal sealed class MainWindow : Window
         };
         inputField.SchemeName = TuiSchemes.Input;
         inputField.Accepting += OnInputAccepting;
+        inputField.KeyDown += OnInputKeyDown;
 
         // ─── StatusBar (bottom row) ───────────────────────────────────
         // Identity + port are stored as fields so the Settings-dialog
@@ -146,7 +160,7 @@ internal sealed class MainWindow : Window
         // so a status-bar Shortcut on F10 is shadowed by the framework
         // and never fires. Esc reaches the user reliably from any focus.
         statusIdentity = new Shortcut(Key.Empty, FormatCallsign(myCall), null);
-        statusPort = new Shortcut(Key.Empty, portName, null);
+        statusPort = new Shortcut(Key.Empty, endpoint.StatusLabel, null);
         statusLink = new Shortcut(Key.Empty, "DISCONNECTED", null);
         var statusConnect = new Shortcut(Key.F2, "Conn", () => PromptConnect());
         var statusDisconnect = new Shortcut(Key.F3, "Disc", () => InitiateDisconnect());
@@ -168,7 +182,7 @@ internal sealed class MainWindow : Window
         Add(menuBar, monitorFrame, chatFrame, inputField, statusBar);
 
         // ─── SessionRunner wiring ─────────────────────────────────────
-        runner = new SessionRunner(modem, myCall, OnRunnerChatLine, OnRunnerLinkStateChanged);
+        runner = new SessionRunner(modem, myCall, OnRunnerChatLine, OnRunnerChatText, OnRunnerLinkStateChanged);
         runner.FrameTraced += OnRunnerFrameTraced;
 
         // Defer the pump start + autoconnect until the view is initialised,
@@ -331,10 +345,16 @@ internal sealed class MainWindow : Window
 
     private void PromptSettings()
     {
-        // Pre-fill with the LIVE config (mutable myCall / portName) rather
+        // Pre-fill with the LIVE config (mutable myCall / endpoint) rather
         // than the saved settings — the user expects "edit what's currently
-        // running", not "edit what's persisted".
-        var dialog = new SettingsDialog(FormatCallsign(myCall), portName);
+        // running", not "edit what's persisted". The transport the user
+        // isn't on is pre-filled from the saved settings, so switching to
+        // TCP and back doesn't mean retyping the port.
+        var dialog = new SettingsDialog(
+            FormatCallsign(myCall),
+            endpoint.Kind,
+            endpoint.Kind == TransportKind.Serial ? endpoint.Value : AppContext.Settings.SerialPort ?? string.Empty,
+            endpoint.Kind == TransportKind.Tcp ? endpoint.Value : AppContext.Settings.TcpEndpoint ?? string.Empty);
         app.Run(dialog);
         if (dialog.Canceled)
         {
@@ -342,12 +362,9 @@ internal sealed class MainWindow : Window
         }
 
         var newCallStr = dialog.MyCallResult ?? string.Empty;
-        var newPortStr = (dialog.PortResult ?? string.Empty).Trim();
-
-        if (string.IsNullOrWhiteSpace(newCallStr) || string.IsNullOrWhiteSpace(newPortStr))
+        if (string.IsNullOrWhiteSpace(newCallStr))
         {
-            MessageBox.ErrorQuery(app, "Settings incomplete",
-                "Both MYCALL and serial port must be set.", "OK");
+            MessageBox.ErrorQuery(app, "Settings incomplete", "MYCALL must be set.", "OK");
             return;
         }
         if (!Callsign.TryParse(newCallStr, out var newCall))
@@ -357,29 +374,52 @@ internal sealed class MainWindow : Window
             return;
         }
 
+        ModemEndpoint newEndpoint;
+        if (dialog.TransportResult == TransportKind.Tcp)
+        {
+            if (!ModemEndpoint.TryParseTcp(dialog.TcpResult, out var tcp, out var tcpError))
+            {
+                MessageBox.ErrorQuery(app, "Invalid TCP endpoint",
+                    $"{tcpError}\n\nSettings unchanged.", "OK");
+                return;
+            }
+            newEndpoint = tcp;
+        }
+        else
+        {
+            var newPortStr = (dialog.PortResult ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(newPortStr))
+            {
+                MessageBox.ErrorQuery(app, "Settings incomplete",
+                    "A serial port must be set when the transport is Serial.", "OK");
+                return;
+            }
+            newEndpoint = ModemEndpoint.ForSerial(newPortStr);
+        }
+
         // Update the persisted settings (no-op if PersistenceEnabled=false,
         // i.e. CLI-driven instances).
         AppContext.Settings.MyCall = newCallStr;
-        AppContext.Settings.SerialPort = newPortStr;
+        Program.ApplyEndpointToSettings(AppContext.Settings, newEndpoint);
         AppContext.SaveSettings();
 
         // Hot-swap. Runs on a background task so the UI thread stays
         // responsive; ReconfigureAsync marshals UI updates back via
         // app.Invoke.
-        _ = Task.Run(() => ReconfigureAsync(newPortStr, newCall));
+        _ = Task.Run(() => ReconfigureAsync(newEndpoint, newCall));
     }
 
     /// <summary>
-    /// Apply a live MYCALL / port change without restarting the process.
+    /// Apply a live MYCALL / modem change without restarting the process.
     /// Disconnects any active session, disposes the runner (and the modem
-    /// if the port is changing), reopens the modem on the new port if
-    /// needed, builds a fresh runner with the new MYCALL, and resumes
+    /// if the endpoint is changing), reopens the modem on the new endpoint
+    /// if needed, builds a fresh runner with the new MYCALL, and resumes
     /// pumping. UI status bar + window title refresh once the new pump
     /// is live.
     /// </summary>
-    private async Task ReconfigureAsync(string newPortName, Callsign newMyCall)
+    private async Task ReconfigureAsync(ModemEndpoint newEndpoint, Callsign newMyCall)
     {
-        var portChanged = !string.Equals(newPortName, portName, StringComparison.Ordinal);
+        var portChanged = newEndpoint != endpoint;
         var callChanged = !newMyCall.Equals(myCall);
         if (!portChanged && !callChanged)
         {
@@ -388,7 +428,7 @@ internal sealed class MainWindow : Window
         }
 
         app.Invoke(() => AppendChat(
-            $"*** Reconfiguring: MYCALL={FormatCallsign(newMyCall)} port={newPortName} ..."));
+            $"*** Reconfiguring: MYCALL={FormatCallsign(newMyCall)} {newEndpoint.Description} ..."));
 
         // 1. Disconnect active session (best-effort; we proceed regardless).
         if (linkState != LinkState.Disconnected)
@@ -404,20 +444,20 @@ internal sealed class MainWindow : Window
             }
         }
 
-        // 2. Open the new modem FIRST (if port changing). Doing this before
-        //    disposing the current modem means a failed open leaves us with
-        //    a working configuration to fall back to.
-        KissSerialModem newModem = modem;
+        // 2. Open the new modem FIRST (if the endpoint is changing). Doing
+        //    this before disposing the current modem means a failed open
+        //    leaves us with a working configuration to fall back to.
+        IAx25Transport newModem = modem;
         if (portChanged)
         {
             try
             {
-                newModem = KissSerialModem.Open(newPortName);
+                newModem = await newEndpoint.OpenAsync(CancellationToken.None).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 app.Invoke(() => MessageBox.ErrorQuery(app, "Modem open failed",
-                    $"Couldn't open {newPortName}: {ex.Message}\n\nKeeping current configuration.",
+                    $"Couldn't open {newEndpoint.Description}: {ex.Message}\n\nKeeping current configuration.",
                     "OK"));
                 return;
             }
@@ -431,18 +471,18 @@ internal sealed class MainWindow : Window
         try { runnerCts?.Dispose(); } catch { /* swallow */ }
         runnerCts = null;
 
-        // 4. Swap modem (if port changed).
+        // 4. Swap modem (if the endpoint changed).
         if (portChanged)
         {
-            try { modem.Dispose(); } catch { /* swallow */ }
+            modem.CloseQuietly();
             modem = newModem;
         }
 
         myCall = newMyCall;
-        portName = newPortName;
+        endpoint = newEndpoint;
 
         // 5. Build the new runner + restart the pump.
-        runner = new SessionRunner(modem, myCall, OnRunnerChatLine, OnRunnerLinkStateChanged);
+        runner = new SessionRunner(modem, myCall, OnRunnerChatLine, OnRunnerChatText, OnRunnerLinkStateChanged);
         runner.FrameTraced += OnRunnerFrameTraced;
         runnerCts = new CancellationTokenSource();
         _ = runner.Start(runnerCts.Token);
@@ -450,10 +490,10 @@ internal sealed class MainWindow : Window
         // 6. Refresh UI bits the user notices.
         app.Invoke(() =>
         {
-            Title = $"Packet.Term {AppInfo.Version}  —  MYCALL {FormatCallsign(myCall)}  port {portName} @ 57600";
+            Title = $"Packet.Term {AppInfo.Version}  —  MYCALL {FormatCallsign(myCall)}  {endpoint.Description}";
             statusIdentity.Title = FormatCallsign(myCall);
-            statusPort.Title = portName;
-            AppendChat($"*** Reconfigured: MYCALL={FormatCallsign(myCall)} port={portName}");
+            statusPort.Title = endpoint.StatusLabel;
+            AppendChat($"*** Reconfigured: MYCALL={FormatCallsign(myCall)} {endpoint.Description}");
             // statusbar layout may need a kick if Title widths changed.
             SetNeedsLayout();
         });
@@ -465,7 +505,7 @@ internal sealed class MainWindow : Window
             $"Packet.Term v{AppInfo.Version}\n" +
             "\n" +
             "An AX.25 terminal application for connected-mode sessions\n" +
-            "over a KISS-over-USB-serial modem.\n" +
+            "over a KISS modem — USB serial or KISS over TCP.\n" +
             "\n" +
             "Built on @packet-net/ax25 and Terminal.Gui v2.\n" +
             "MIT licence.\n" +
@@ -479,6 +519,18 @@ internal sealed class MainWindow : Window
     private void OnRunnerChatLine(string line)
     {
         AppendChat(line);
+    }
+
+    private void OnRunnerChatText(string text, bool continuesPreviousLine)
+    {
+        if (continuesPreviousLine)
+        {
+            AppendChatContinuation(text);
+        }
+        else
+        {
+            AppendChat(text);
+        }
     }
 
     private void OnRunnerLinkStateChanged(LinkState state, Callsign? peer)
@@ -507,6 +559,19 @@ internal sealed class MainWindow : Window
     {
         var stamped = $"[{DateTimeOffset.Now.LocalDateTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture)}] {line}";
         chatLog.Add(stamped);
+        app.Invoke(() =>
+        {
+            chatView.Text = string.Join("\n", chatLog.Snapshot());
+            chatView.MoveEnd();
+        });
+    }
+
+    // A peer line that was segmented across frames: join the tail onto the
+    // row already on screen instead of starting a new one (and don't stamp
+    // it again — the timestamp belongs to when the line started).
+    private void AppendChatContinuation(string text)
+    {
+        chatLog.AppendToLast(text);
         app.Invoke(() =>
         {
             chatView.Text = string.Join("\n", chatLog.Snapshot());
@@ -566,9 +631,65 @@ internal sealed class MainWindow : Window
         inputField.Text = string.Empty;
         if (string.IsNullOrEmpty(text)) return;
 
+        RememberInput(text);
         AppendChat($"me: {text}");
         var bytes = Encoding.ASCII.GetBytes(text + "\r");
         runner.SendData(bytes);
+    }
+
+    // ─── Input history (Up / Down) ────────────────────────────────────
+
+    private void RememberInput(string line)
+    {
+        // Skip a straight repeat of the previous line — re-sending the
+        // same command shouldn't cost two presses of Up to get past.
+        if (inputHistory.Count == 0 || !string.Equals(inputHistory[^1], line, StringComparison.Ordinal))
+        {
+            inputHistory.Add(line);
+            if (inputHistory.Count > InputHistoryCapacity)
+            {
+                inputHistory.RemoveAt(0);
+            }
+        }
+        historyIndex = inputHistory.Count;
+        historyDraft = string.Empty;
+    }
+
+    private void OnInputKeyDown(object? sender, Key e)
+    {
+        // Only while the field is live — when disconnected it's read-only
+        // and there's nothing to recall into.
+        if (inputField.ReadOnly) return;
+
+        if (e == Key.CursorUp)
+        {
+            RecallHistory(-1);
+            e.Handled = true;
+        }
+        else if (e == Key.CursorDown)
+        {
+            RecallHistory(+1);
+            e.Handled = true;
+        }
+    }
+
+    private void RecallHistory(int delta)
+    {
+        if (inputHistory.Count == 0) return;
+
+        // Stepping off the line being typed: keep it, so Down comes back
+        // to what the user had half-written.
+        if (historyIndex == inputHistory.Count)
+        {
+            historyDraft = inputField.Text ?? string.Empty;
+        }
+
+        var next = Math.Clamp(historyIndex + delta, 0, inputHistory.Count);
+        if (next == historyIndex) return;
+
+        historyIndex = next;
+        inputField.Text = historyIndex == inputHistory.Count ? historyDraft : inputHistory[historyIndex];
+        inputField.MoveEnd();
     }
 
     // ─── Disposal ─────────────────────────────────────────────────────
@@ -578,12 +699,32 @@ internal sealed class MainWindow : Window
         if (!disposed && disposing)
         {
             disposed = true;
+
+            // Hang up before tearing anything down. Without a DISC on the
+            // wire the peer holds the link open until its own timers give
+            // up, and the next Packet.Term run dials into a session the
+            // node still believes is live. Bounded, and best-effort: this
+            // runs on the way out, after the message loop has stopped, so
+            // a peer that won't answer costs a few seconds and no more.
+            // Ordering matters — the listener pump has to still be running
+            // to collect the UA, so this goes before the cancel below.
+            try
+            {
+                if (runner.State is not LinkState.Disconnected)
+                {
+                    runner.DisconnectAsync(TimeSpan.FromSeconds(5), CancellationToken.None)
+                        .Wait(TimeSpan.FromSeconds(6), CancellationToken.None);
+                }
+            }
+            catch { /* swallowed — we're leaving either way */ }
+
             try { runnerCts?.Cancel(); } catch { /* swallowed */ }
             try { runner.Dispose(); } catch { /* swallowed */ }
             try { runnerCts?.Dispose(); } catch { /* swallowed */ }
             // MainWindow owns the modem (Program transferred it at
-            // construction); dispose it here so the serial port closes.
-            try { modem.Dispose(); } catch { /* swallowed */ }
+            // construction); dispose it here so the serial port / socket
+            // closes.
+            modem.CloseQuietly();
         }
         base.Dispose(disposing);
     }

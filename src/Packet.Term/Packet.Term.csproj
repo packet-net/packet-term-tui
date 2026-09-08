@@ -14,6 +14,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Packet.Term.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Terminal.Gui" />
     <PackageReference Include="CommandLineParser" />
     <PackageReference Include="System.IO.Ports" />
@@ -28,6 +32,7 @@
          brings Packet.Ax25.Sdl transitively (from m0lte/ax25sdl). -->
     <PackageReference Include="Packet.Core" />
     <PackageReference Include="Packet.Ax25" />
+    <PackageReference Include="Packet.Ax25.Transport.Abstractions" />
     <PackageReference Include="Packet.Kiss" />
     <PackageReference Include="Packet.Kiss.Serial" />
   </ItemGroup>

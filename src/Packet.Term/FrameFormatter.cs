@@ -69,13 +69,19 @@ public static class FrameFormatter
         sb.Append(FormatBody(frame));
         sb.Append('>');
 
-        // I-frames + UI frames carry an info field; indent it on the next line.
+        // I-frames + UI frames carry an info field; indent it on the next
+        // line. An info field of nothing but line terminators renders as
+        // nothing, so don't leave a dangling indent behind it.
         var kind = ClassifyKind(frame);
         if ((kind == "I" || kind == "UI") && frame.Info.Length > 0)
         {
-            sb.Append('\n');
-            sb.Append("    ");
-            sb.Append(FormatInfo(frame.Info.Span));
+            var info = FormatInfo(frame.Info.Span);
+            if (info.Length > 0)
+            {
+                sb.Append('\n');
+                sb.Append("    ");
+                sb.Append(info);
+            }
         }
 
         return sb.ToString();
@@ -163,20 +169,11 @@ public static class FrameFormatter
         };
     }
 
+    // The info field's own line breaks are kept as breaks, each
+    // continuation carrying the same indent as the first — the monitor
+    // pane splits the rendered line on '\n' into its scroll-back, so a
+    // multi-line payload lands as multiple indented rows rather than one
+    // run of text with dots where the CRs were.
     private static string FormatInfo(ReadOnlySpan<byte> info)
-    {
-        // Plain-ASCII. Strip trailing CR/LF (the peer added them; the
-        // monitor line already breaks at a newline). Replace remaining
-        // control bytes with '.' so a stray byte doesn't tear the layout.
-        int end = info.Length;
-        while (end > 0 && (info[end - 1] == 0x0D || info[end - 1] == 0x0A)) end--;
-
-        var sb = new StringBuilder(end);
-        for (int i = 0; i < end; i++)
-        {
-            byte b = info[i];
-            sb.Append(b is >= 0x20 and < 0x7F ? (char)b : '.');
-        }
-        return sb.ToString();
-    }
+        => string.Join("\n    ", ReceivedText.ToLines(info));
 }

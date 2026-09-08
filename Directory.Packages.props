@@ -11,6 +11,10 @@
          transitively (which itself comes from m0lte/ax25sdl). -->
     <PackageVersion Include="Packet.Core" Version="0.35.0" />
     <PackageVersion Include="Packet.Ax25" Version="0.35.0" />
+    <!-- IAx25Transport — the neutral modem seam. Pulled in transitively by
+         Packet.Ax25 anyway; referenced directly because Packet.Term names the
+         type in its own signatures (ModemEndpoint / SessionRunner). -->
+    <PackageVersion Include="Packet.Ax25.Transport.Abstractions" Version="0.35.0" />
     <PackageVersion Include="Packet.Kiss" Version="0.35.0" />
     <PackageVersion Include="Packet.Kiss.Serial" Version="0.35.0" />
 

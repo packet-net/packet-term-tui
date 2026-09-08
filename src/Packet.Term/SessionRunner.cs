@@ -1,6 +1,6 @@
 using Packet.Ax25.Session;
+using Packet.Ax25.Transport;
 using Packet.Core;
-using Packet.Kiss.Serial;
 
 namespace Packet.Term;
 
@@ -45,8 +45,16 @@ public enum LinkState
 /// </remarks>
 public sealed class SessionRunner : IDisposable
 {
+    /// <summary>
+    /// T3, the idle-link poll interval: with no traffic for this long the
+    /// link sends an RR poll to check the peer is still there. Matches
+    /// axcall's default rather than the library's 30 s.
+    /// </summary>
+    public static readonly TimeSpan DefaultKeepalive = TimeSpan.FromSeconds(300);
+
     private readonly Callsign myCall;
     private readonly Action<string> chatLog;
+    private readonly Action<string, bool> chatText;
     private readonly Action<LinkState, Callsign?> onStateChange;
     private readonly Ax25Listener listener;
 
@@ -55,6 +63,9 @@ public sealed class SessionRunner : IDisposable
     private Callsign? remote;
     private LinkState state = LinkState.Disconnected;
     private bool welcomeSent;
+    // Whether the peer's last information field ended mid-line, so the
+    // next one continues the row already on screen.
+    private bool peerLineOpen;
 
     /// <summary>The active peer's callsign, or <c>null</c> when no session.</summary>
     public Callsign? Remote
@@ -72,20 +83,49 @@ public sealed class SessionRunner : IDisposable
     /// Construct a runner. The runner does not start its listener pump
     /// until <see cref="Start"/> is called.
     /// </summary>
-    /// <param name="modem">Serial KISS modem the session talks through.</param>
+    /// <param name="modem">KISS modem the session talks through — serial or KISS-over-TCP.</param>
     /// <param name="myCall">Our callsign; all inbound filtering checks against this.</param>
-    /// <param name="chatLog">Sink for human-readable chat-pane lines.</param>
+    /// <param name="chatLog">Sink for the runner's own notices ("*** ..." lines).</param>
+    /// <param name="chatText">
+    /// Sink for text received from the peer: the line, and whether it
+    /// continues the previously delivered one (a line segmented across
+    /// frames) rather than starting a new row.
+    /// </param>
     /// <param name="onStateChange">Notified when the coarse link state changes.</param>
-    public SessionRunner(KissSerialModem modem, Callsign myCall, Action<string> chatLog, Action<LinkState, Callsign?> onStateChange)
+    public SessionRunner(
+        IAx25Transport modem,
+        Callsign myCall,
+        Action<string> chatLog,
+        Action<string, bool> chatText,
+        Action<LinkState, Callsign?> onStateChange)
     {
         ArgumentNullException.ThrowIfNull(modem);
         this.myCall = myCall;
         this.chatLog = chatLog ?? throw new ArgumentNullException(nameof(chatLog));
+        this.chatText = chatText ?? throw new ArgumentNullException(nameof(chatText));
         this.onStateChange = onStateChange ?? throw new ArgumentNullException(nameof(onStateChange));
 
         listener = new Ax25Listener(modem, new Ax25ListenerOptions
         {
             MyCall = myCall,
+            // Set explicitly, never inherited — the same policy as
+            // m0lte/axcall's SessionRelay, so Packet.Term's on-air
+            // behaviour is its own and doesn't drift with whichever
+            // Packet.Ax25 version it's pinned to. The library's defaults
+            // (30 s T3, SABME-first dial) don't suit a terminal on a
+            // shared channel talking to modulo-8 nodes:
+            //
+            //  - T3: at 30 s an idle session polls the node twice a
+            //    minute forever, and every poll is another chance to
+            //    collide. 300 s matches axcall.
+            //  - PreferExtendedConnect: dialling SABME costs an FRMR
+            //    round trip against every mod-8 BPQ node, and the
+            //    mid-dial fallback skips the pre-SABM XID, leaving the
+            //    link go-back-N. A plain SABM dial is both quicker and
+            //    (via that XID) more likely to end up with SREJ.
+            T3 = DefaultKeepalive,
+            PreferExtendedConnect = false,
+            PreConnectXidNegotiatesSrej = true,
             ConfigureSession = AttachSessionListeners,
         });
         listener.SessionAccepted += OnSessionAccepted;
@@ -243,6 +283,7 @@ public sealed class SessionRunner : IDisposable
             remote = null;
             activeSession = null;
             welcomeSent = false;
+            peerLineOpen = false;
         }
         listener.AcceptIncoming = true;
         onStateChange(LinkState.Disconnected, null);
@@ -318,16 +359,30 @@ public sealed class SessionRunner : IDisposable
 
     private void DeliverData(DataLinkDataIndication di, Callsign peer)
     {
-        var span = di.Info.Span;
-        int end = span.Length;
-        while (end > 0 && (span[end - 1] == 0x0D || span[end - 1] == 0x0A)) end--;
-        var sb = new System.Text.StringBuilder(end);
-        for (int i = 0; i < end; i++)
+        // One information field can carry several lines of a node's menu
+        // or help text, and one line can span several fields when it is
+        // longer than PACLEN. So: break on the terminators the field
+        // actually contains, attribute the first line to the peer, and
+        // hand a line left open at the end of a field to the next field
+        // as a continuation rather than starting a new row.
+        var chunk = ReceivedText.Split(di.Info.Span);
+        if (chunk.Lines.Count == 0)
         {
-            byte b = span[i];
-            sb.Append(b is >= 0x20 and < 0x7F ? (char)b : '.');
+            // Nothing but terminators — that closes any open line.
+            peerLineOpen = false;
+            return;
         }
-        chatLog($"{FormatCallsignDisplay(peer)}: {sb}");
+
+        for (int i = 0; i < chunk.Lines.Count; i++)
+        {
+            var continues = i == 0 && peerLineOpen;
+            var text = continues || i > 0
+                ? chunk.Lines[i]
+                : $"{FormatCallsignDisplay(peer)}: {chunk.Lines[i]}";
+            chatText(text, continues);
+        }
+
+        peerLineOpen = chunk.Incomplete;
     }
 
     private static string FormatCallsignDisplay(Callsign c)

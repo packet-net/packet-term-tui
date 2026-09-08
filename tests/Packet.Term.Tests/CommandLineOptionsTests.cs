@@ -41,12 +41,28 @@ public class CommandLineOptionsTests
     }
 
     [Fact]
+    public void Parses_Tcp_Endpoint()
+    {
+        var result = Parser.Default.ParseArguments<CommandLineOptions>(new[]
+        {
+            "--mycall", "M0LTE-1",
+            "--tcp", "localhost:8001",
+        });
+
+        var parsed = (Parsed<CommandLineOptions>)result;
+        parsed.Value.MyCall.Should().Be("M0LTE-1");
+        parsed.Value.Tcp.Should().Be("localhost:8001");
+        parsed.Value.Port.Should().BeNull();
+    }
+
+    [Fact]
     public void Parses_Empty_Args()
     {
         var result = Parser.Default.ParseArguments<CommandLineOptions>(Array.Empty<string>());
         var parsed = (Parsed<CommandLineOptions>)result;
         parsed.Value.MyCall.Should().BeNull();
         parsed.Value.Port.Should().BeNull();
+        parsed.Value.Tcp.Should().BeNull();
         parsed.Value.Connect.Should().BeNull();
     }
 }

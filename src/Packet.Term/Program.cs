@@ -1,15 +1,16 @@
 using System.IO.Ports;
 using CommandLine;
+using Packet.Ax25.Transport;
 using Packet.Core;
-using Packet.Kiss.Serial;
 using Packet.Term.Tui;
 
 namespace Packet.Term;
 
 /// <summary>
-/// Entry point. Parses CLI, resolves MYCALL + serial port (CLI override
-/// → settings → interactive prompt), opens the modem, hands off to the
-/// Terminal.Gui v2 app shell in <see cref="PacketTermApp"/>.
+/// Entry point. Parses CLI, resolves MYCALL + modem endpoint — serial port
+/// or KISS-over-TCP — (CLI override → settings → interactive prompt), opens
+/// the modem, hands off to the Terminal.Gui v2 app shell in
+/// <see cref="PacketTermApp"/>.
 /// </summary>
 /// <remarks>
 /// All boot-time prompts happen here via plain
@@ -19,7 +20,7 @@ namespace Packet.Term;
 /// </remarks>
 public static class Program
 {
-    public static int Main(string[] args)
+    public static async Task<int> Main(string[] args)
     {
         if (args.Contains("--version") || args.Contains("-V"))
         {
@@ -34,19 +35,26 @@ public static class Program
         }
         var opts = ok.Value;
 
+        if (!string.IsNullOrWhiteSpace(opts.Port) && !string.IsNullOrWhiteSpace(opts.Tcp))
+        {
+            Console.Error.WriteLine("--port and --tcp are mutually exclusive — the modem is on one or the other.");
+            return 2;
+        }
+
         AppContext.Load();
 
-        // When MYCALL and port are both supplied via CLI, treat this run
-        // as ephemeral — disable settings persistence so two parallel
-        // instances started with their own --mycall and --port don't race
-        // on the shared settings.json. The Connect-target history and
-        // any Settings-dialog changes during this run won't survive to
-        // disk, which is the right trade-off when the CLI is the source
-        // of truth for identity + port.
-        if (!string.IsNullOrWhiteSpace(opts.MyCall) && !string.IsNullOrWhiteSpace(opts.Port))
+        // When MYCALL and a modem endpoint are both supplied via CLI, treat
+        // this run as ephemeral — disable settings persistence so two
+        // parallel instances started with their own --mycall and
+        // --port/--tcp don't race on the shared settings.json. The
+        // Connect-target history and any Settings-dialog changes during
+        // this run won't survive to disk, which is the right trade-off when
+        // the CLI is the source of truth for identity + modem.
+        var endpointFromCli = !string.IsNullOrWhiteSpace(opts.Port) || !string.IsNullOrWhiteSpace(opts.Tcp);
+        if (!string.IsNullOrWhiteSpace(opts.MyCall) && endpointFromCli)
         {
             AppContext.PersistenceEnabled = false;
-            Console.WriteLine("Packet.Term: --mycall + --port both provided, settings persistence disabled for this run.");
+            Console.WriteLine("Packet.Term: --mycall + --port/--tcp both provided, settings persistence disabled for this run.");
         }
 
         // Resolve MYCALL: --mycall > settings > prompt.
@@ -69,17 +77,35 @@ public static class Program
             return 2;
         }
 
-        // Resolve port: --port > settings > selection prompt.
-        var portName = opts.Port ?? AppContext.Settings.SerialPort;
-        if (string.IsNullOrWhiteSpace(portName))
+        // Resolve the modem endpoint: --tcp / --port > settings > prompt.
+        ModemEndpoint? endpoint;
+        if (!string.IsNullOrWhiteSpace(opts.Tcp))
         {
-            portName = ChoosePort();
-            if (portName is null)
+            if (!ModemEndpoint.TryParseTcp(opts.Tcp, out endpoint, out var tcpError))
             {
-                Console.Error.WriteLine("No serial ports found. Re-run with --port /path/to/port once a modem is attached.");
+                Console.Error.WriteLine($"Invalid --tcp endpoint: {tcpError}");
+                return 2;
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(opts.Port))
+        {
+            endpoint = ModemEndpoint.ForSerial(opts.Port);
+        }
+        else
+        {
+            endpoint = EndpointFromSettings(AppContext.Settings);
+        }
+
+        if (endpoint is null)
+        {
+            endpoint = ChooseEndpoint();
+            if (endpoint is null)
+            {
+                Console.Error.WriteLine(
+                    "No modem chosen. Re-run with --port /path/to/port (serial) or --tcp host:port (KISS over TCP).");
                 return 3;
             }
-            AppContext.Settings.SerialPort = portName;
+            ApplyEndpointToSettings(AppContext.Settings, endpoint);
             AppContext.SaveSettings();
         }
 
@@ -96,26 +122,26 @@ public static class Program
             autoConnect = ac;
         }
 
-        KissSerialModem modem;
+        IAx25Transport modem;
         try
         {
-            modem = KissSerialModem.Open(portName);
+            modem = await endpoint.OpenAsync(CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Failed to open {portName}: {ex.Message}");
+            Console.Error.WriteLine($"Failed to open {endpoint.Description}: {ex.Message}");
             return 5;
         }
 
-        Console.WriteLine($"Packet.Term {AppInfo.Version}  MYCALL={myCall}  port={portName} @ 57600");
+        Console.WriteLine($"Packet.Term {AppInfo.Version}  MYCALL={myCall}  {endpoint.Description}");
         Console.WriteLine("Starting TUI...");
 
         try
         {
             // MainWindow takes ownership of the modem now — it may swap
-            // to a different port at runtime via the Settings dialog.
+            // to a different endpoint at runtime via the Settings dialog.
             // Don't wrap with `using` here; MainWindow.Dispose handles it.
-            PacketTermApp.Run(myCall, portName, modem, autoConnect);
+            PacketTermApp.Run(myCall, endpoint, modem, autoConnect);
         }
         catch (Exception ex)
         {
@@ -127,24 +153,81 @@ public static class Program
         return 0;
     }
 
-    private static string? ChoosePort()
+    /// <summary>
+    /// The saved modem endpoint, or <c>null</c> when the settings file
+    /// doesn't name one yet (first run, or a TCP-mode file whose endpoint
+    /// was cleared by hand).
+    /// </summary>
+    internal static ModemEndpoint? EndpointFromSettings(AppSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        if (settings.Transport == TransportKind.Tcp)
+        {
+            // A saved endpoint is trusted to be well-formed; if it isn't
+            // (hand-edited file), fall through to the prompt rather than
+            // failing the boot with a parse error.
+            return ModemEndpoint.TryParseTcp(settings.TcpEndpoint, out var tcp, out _) ? tcp : null;
+        }
+
+        return string.IsNullOrWhiteSpace(settings.SerialPort)
+            ? null
+            : ModemEndpoint.ForSerial(settings.SerialPort);
+    }
+
+    /// <summary>
+    /// Write <paramref name="endpoint"/> into <paramref name="settings"/>.
+    /// The other transport's value is left alone — switching to TCP and back
+    /// keeps the serial port you last used.
+    /// </summary>
+    internal static void ApplyEndpointToSettings(AppSettings settings, ModemEndpoint endpoint)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(endpoint);
+
+        settings.Transport = endpoint.Kind;
+        if (endpoint.Kind == TransportKind.Tcp)
+        {
+            settings.TcpEndpoint = endpoint.Value;
+        }
+        else
+        {
+            settings.SerialPort = endpoint.Value;
+        }
+    }
+
+    private static ModemEndpoint? ChooseEndpoint()
     {
         var ports = SerialPort.GetPortNames();
-        if (ports.Length == 0) return null;
         Array.Sort(ports, StringComparer.Ordinal);
 
-        Console.WriteLine("Available serial ports:");
-        for (int i = 0; i < ports.Length; i++)
+        if (ports.Length == 0)
         {
-            Console.WriteLine($"  [{i + 1}] {ports[i]}");
+            Console.WriteLine("No serial ports found.");
+            Console.Write("Type a KISS-over-TCP endpoint (host:port), or a serial port path: ");
         }
-        Console.Write($"Pick one [1-{ports.Length}], or type a path: ");
+        else
+        {
+            Console.WriteLine("Available serial ports:");
+            for (int i = 0; i < ports.Length; i++)
+            {
+                Console.WriteLine($"  [{i + 1}] {ports[i]}");
+            }
+            Console.Write($"Pick one [1-{ports.Length}], a serial path, or host:port for KISS over TCP: ");
+        }
+
         var raw = Console.ReadLine()?.Trim();
         if (string.IsNullOrEmpty(raw)) return null;
         if (int.TryParse(raw, out var idx) && idx >= 1 && idx <= ports.Length)
         {
-            return ports[idx - 1];
+            return ModemEndpoint.ForSerial(ports[idx - 1]);
         }
-        return raw;
+        // "host:port" is unambiguous here — no serial port name (COM5,
+        // /dev/ttyUSB0) ends in a colon plus a port number.
+        if (ModemEndpoint.LooksLikeTcp(raw) && ModemEndpoint.TryParseTcp(raw, out var tcp, out _))
+        {
+            return tcp;
+        }
+        return ModemEndpoint.ForSerial(raw);
     }
 }
