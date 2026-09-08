@@ -33,6 +33,31 @@ public sealed class RingBuffer
         }
     }
 
+    /// <summary>
+    /// Append <paramref name="suffix"/> to the newest entry, rather than
+    /// starting a new one. Used when a peer's line arrives split across
+    /// frames: the tail has to join the line already on screen. Falls back
+    /// to <see cref="Add"/> when the buffer is empty.
+    /// </summary>
+    public void AppendToLast(string suffix)
+    {
+        ArgumentNullException.ThrowIfNull(suffix);
+        lock (lockObj)
+        {
+            if (queue.Count == 0)
+            {
+                queue.Enqueue(suffix);
+                return;
+            }
+            // Queue<T> has no indexer; rebuild is fine at these sizes
+            // (a couple of hundred lines) and keeps the type honest.
+            var items = queue.ToArray();
+            items[^1] += suffix;
+            queue.Clear();
+            foreach (var item in items) queue.Enqueue(item);
+        }
+    }
+
     /// <summary>Take a snapshot of the current buffer contents, oldest-first.</summary>
     public IReadOnlyList<string> Snapshot()
     {

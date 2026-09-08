@@ -1,6 +1,6 @@
 # Packet.Term
 
-A full-window AX.25 terminal application for connected-mode sessions over a KISS-over-USB-serial modem. Turbo Vision / DOS Edit aesthetic, built on **Terminal.Gui v2**.
+A full-window AX.25 terminal application for connected-mode sessions over a KISS modem — USB serial, or KISS over TCP. Turbo Vision / DOS Edit aesthetic, built on **Terminal.Gui v2**.
 
 ```text
 ╔═══════════════════════════════════════════════════════════════════════════╗
@@ -27,16 +27,23 @@ A full-window AX.25 terminal application for connected-mode sessions over a KISS
 ## Run it
 
 ```sh
+# KISS over USB serial
 dotnet run --project src/Packet.Term -- --mycall M0LTE-1 --port /dev/ttyUSB0
+
+# KISS over TCP — a TNC or node exposing a KISS listener (LinBPQ, Direwolf, net-sim)
+dotnet run --project src/Packet.Term -- --mycall M0LTE-1 --tcp localhost:8001
 ```
 
 | Flag | Purpose |
 | --- | --- |
 | `--mycall <CALL-SSID>` | Your callsign + SSID. Prompted if omitted. |
-| `--port <path>` | Serial port (e.g. `/dev/ttyUSB0`, `COM5`). Prompted if omitted. |
+| `--port <path>` | Serial port (e.g. `/dev/ttyUSB0`, `COM5`). |
+| `--tcp <host:port>` | KISS-over-TCP endpoint (e.g. `localhost:8001`). Mutually exclusive with `--port`. |
 | `--connect <CALL>` | Auto-connect once the TUI is up. Optional. |
 
-If `--mycall` AND `--port` are both supplied, the run is treated as ephemeral — settings aren't persisted, so two parallel instances driven by their own flags can run side-by-side without racing on the shared settings file. Useful for connecting two modems on the same host to each other.
+With neither `--port` nor `--tcp`, the modem comes from the settings file; failing that you're prompted, and the prompt takes a serial port *or* a `host:port` endpoint. Both are editable at runtime from the Settings dialog (`Ctrl-S`), which is also where you switch between the two transports.
+
+If `--mycall` AND one of `--port` / `--tcp` are supplied, the run is treated as ephemeral — settings aren't persisted, so two parallel instances driven by their own flags can run side-by-side without racing on the shared settings file. Useful for connecting two modems on the same host to each other.
 
 ## Keyboard
 
@@ -45,10 +52,11 @@ If `--mycall` AND `--port` are both supplied, the run is treated as ephemeral �
 | `F2` | Connect... (modal callsign prompt) |
 | `F3` | Disconnect |
 | `Esc` (or `Ctrl-Q`) | Quit |
+| `↑` / `↓` | Recall previously sent lines (input line) |
 | `F10` | Open menu bar |
-| `Ctrl-S` | Settings... (hot-swap MYCALL / port) |
+| `Ctrl-S` | Settings... (hot-swap MYCALL / transport / port / TCP endpoint) |
 
-While connected, typing in the input line and pressing Enter sends one I-frame.
+While connected, typing in the input line and pressing Enter sends one I-frame. `↑` walks back through what you've sent this run (a half-typed line is kept, so `↓` returns to it).
 
 ## Built on
 

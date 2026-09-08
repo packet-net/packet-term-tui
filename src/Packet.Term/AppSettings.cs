@@ -21,6 +21,17 @@ public sealed class AppSettings
     public string? SerialPort { get; set; }
 
     /// <summary>
+    /// Which of <see cref="SerialPort"/> / <see cref="TcpEndpoint"/> the modem
+    /// is reached through. Absent from a pre-KISS-over-TCP settings file, in
+    /// which case it defaults to <see cref="TransportKind.Serial"/> and the
+    /// saved <see cref="SerialPort"/> is used exactly as before.
+    /// </summary>
+    public TransportKind Transport { get; set; } = TransportKind.Serial;
+
+    /// <summary>KISS-over-TCP endpoint as <c>host:port</c>, e.g. <c>localhost:8001</c>.</summary>
+    public string? TcpEndpoint { get; set; }
+
+    /// <summary>
     /// The callsign last typed into the connect prompt. Pre-filled as the
     /// default value next time the user hits <kbd>C</kbd>.
     /// </summary>
@@ -72,6 +83,8 @@ public sealed class AppSettings
     }
 }
 
-[JsonSourceGenerationOptions(WriteIndented = true)]
+// UseStringEnumConverter: Transport lands in the file as "Serial" / "Tcp"
+// rather than 0 / 1 — settings.json is hand-editable and stays that way.
+[JsonSourceGenerationOptions(WriteIndented = true, UseStringEnumConverter = true)]
 [JsonSerializable(typeof(AppSettings))]
 internal sealed partial class AppSettingsJsonContext : JsonSerializerContext;

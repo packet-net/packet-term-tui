@@ -1,12 +1,12 @@
+using Packet.Ax25.Transport;
 using Packet.Core;
-using Packet.Kiss.Serial;
 using Terminal.Gui.App;
 
 namespace Packet.Term.Tui;
 
 /// <summary>
 /// Terminal.Gui v2 entry-point shim. <see cref="Program"/> hands MYCALL,
-/// the serial port name, the already-opened modem, and an optional
+/// the modem endpoint, the already-opened modem, and an optional
 /// auto-connect target here; this method owns the Terminal.Gui
 /// <see cref="IApplication"/> lifecycle for the whole TUI session.
 /// </summary>
@@ -22,7 +22,7 @@ public static class PacketTermApp
     /// Bring up Terminal.Gui, drive the main window until the user quits,
     /// then shut down cleanly. Synchronous — blocks the caller.
     /// </summary>
-    public static void Run(Callsign myCall, string portName, KissSerialModem modem, Callsign? autoConnect)
+    public static void Run(Callsign myCall, ModemEndpoint endpoint, IAx25Transport modem, Callsign? autoConnect)
     {
         ArgumentNullException.ThrowIfNull(modem);
 
@@ -31,7 +31,7 @@ public static class PacketTermApp
         TuiSchemes.Register();
         try
         {
-            using var window = new MainWindow(app, myCall, portName, modem);
+            using var window = new MainWindow(app, myCall, endpoint, modem);
             window.AttachAutoConnect(autoConnect);
             app.Run(window);
         }

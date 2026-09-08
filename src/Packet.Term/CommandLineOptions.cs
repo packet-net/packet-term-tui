@@ -15,6 +15,9 @@ public sealed class CommandLineOptions
     [Option("port", Required = false, HelpText = "Serial port to open (overrides saved value).")]
     public string? Port { get; set; }
 
+    [Option("tcp", Required = false, HelpText = "KISS-over-TCP endpoint, host:port (e.g. localhost:8001). Mutually exclusive with --port.")]
+    public string? Tcp { get; set; }
+
     [Option("connect", Required = false, HelpText = "Skip the disconnected state — connect to this callsign at startup.")]
     public string? Connect { get; set; }
 }

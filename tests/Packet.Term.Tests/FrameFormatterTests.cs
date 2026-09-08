@@ -89,6 +89,30 @@ public class FrameFormatterTests
         line.Should().Contain("\n    hello");
     }
 
+    [Fact]
+    public void Multi_Line_Info_Keeps_Its_Breaks_And_Indent()
+    {
+        // A node's menu arrives as one info field with CRs inside it. The
+        // monitor pane splits the rendered line on '\n', so each payload
+        // row has to carry the same four-space indent.
+        var info = Encoding.ASCII.GetBytes("GB7RDG BBS\rB)ye L)ist\rEnter command:\r");
+        var i = BuildIFrame(dest: Me, source: Peer, ns: 0, nr: 0, pollFinal: true, info: info);
+        var line = FrameFormatter.Format(FrameDirection.Receive, i, FixedTs);
+
+        line.Should().Contain("\n    GB7RDG BBS");
+        line.Should().Contain("\n    B)ye L)ist");
+        line.Should().Contain("\n    Enter command:");
+        line.Should().NotEndWith("\n    ", "an info field that ends in CR must not leave a dangling indent");
+    }
+
+    [Fact]
+    public void Info_Of_Nothing_But_Terminators_Adds_No_Payload_Row()
+    {
+        var i = BuildIFrame(dest: Me, source: Peer, ns: 0, nr: 0, pollFinal: true, info: Encoding.ASCII.GetBytes("\r"));
+        var line = FrameFormatter.Format(FrameDirection.Receive, i, FixedTs);
+        line.Should().NotContain("\n");
+    }
+
     private static Ax25Frame BuildUFrame(Callsign dest, Callsign source, byte uBase, bool pollFinal, bool isCommand)
     {
         byte control = (byte)(uBase | (pollFinal ? 0x10 : 0x00));
