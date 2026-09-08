@@ -46,8 +46,15 @@ internal sealed class SettingsDialog : Dialog
     public SettingsDialog(string initialMyCall, TransportKind initialTransport, string initialPort, string initialTcp)
     {
         Title = "Settings";
-        Width = 60;
-        Height = 18;
+        // A Dialog's usable content area is three rows/columns short of
+        // these figures, not two: the border takes one each side and the
+        // shadow another. At 60x18 that put the note on the same row as
+        // the buttons and clipped its tail. Sized so the note fits on one
+        // line and a blank row sits between it and the buttons, which
+        // also means an off-by-one in either direction still can't make
+        // the two collide.
+        Width = 66;
+        Height = 20;
 
         var myCallLabel = new Label
         {
