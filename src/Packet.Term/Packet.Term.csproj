@@ -28,9 +28,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Packet.NET libraries — consumed from m0lte/packet.net as NuGet
+    <!-- Packet.NET libraries — consumed from packet-net/packet.net as NuGet
          packages since this repo was extracted on 2026-05-17. Packet.Ax25
-         brings Packet.Ax25.Sdl transitively (from m0lte/ax25sdl). -->
+         brings Packet.Ax25.Sdl transitively (from packet-net/ax25sdl). -->
     <PackageReference Include="Packet.Core" />
     <PackageReference Include="Packet.Ax25" />
     <PackageReference Include="Packet.Ax25.Transport.Abstractions" />
