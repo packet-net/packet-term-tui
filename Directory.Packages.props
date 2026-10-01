@@ -20,6 +20,9 @@
 
     <!-- TUI runtime + CLI parsing + JSON-settings + serial. -->
     <PackageVersion Include="Terminal.Gui" Version="2.5.0" />
+    <!-- Editor view for the monitor / conversation panes; supersedes TG TextView
+         (obsolete as of Terminal.Gui 2.5). Same maintainer as Terminal.Gui. -->
+    <PackageVersion Include="Terminal.Gui.Editor" Version="2.5.7" />
     <PackageVersion Include="CommandLineParser" Version="2.9.1" />
     <!-- 10.0.12 (>= 10.0.11), not 10.0.0: Packet.Kiss.Serial 0.26.0 floors System.IO.Ports at
          >= 10.0.11 (packet.net bumped its .NET 10 servicing set on 2026-08-16), and
