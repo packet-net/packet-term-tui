@@ -10,11 +10,9 @@ name: deps
 #
 # Deliberately scoped to those two prefixes. Third-party pins (Terminal.Gui,
 # xunit, Microsoft.Extensions.*, ...) are left alone — they don't justify a
-# Packet.Term release on their own, and at least one of them is an outright
-# breaking change: Terminal.Gui 2.2+ obsoletes TextView in favour of
-# tui-cs/Editor's EditorView, which with TreatWarningsAsErrors=true turns the four
-# TextView uses in Tui/MainWindow.cs into build errors. Bump those by hand, when
-# you're ready to do the porting work that comes with them.
+# Packet.Term release on their own, and they can break the build outright (Terminal.Gui
+# 2.5 obsoleting TextView did, under TreatWarningsAsErrors=true). Bump those by hand,
+# when you're ready to do whatever porting work comes with them.
 #
 # If the build or tests fail against a new release, nothing is committed
 # and an issue is opened instead.
@@ -248,5 +246,8 @@ jobs:
     uses: ./.github/workflows/release.yml
     permissions:
       contents: write
+    # inherit: release.yml's last step needs APT_DISPATCH_TOKEN (an org secret) to
+    # tell packet-net/apt to re-index; a called workflow sees no secrets otherwise.
+    secrets: inherit
     with:
       tag: ${{ needs.bump.outputs.tag }}

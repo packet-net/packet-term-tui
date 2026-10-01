@@ -76,6 +76,36 @@ jobs:
           done
           ls -la dist
 
+      # .debs for packet-net/apt, which mirrors every .deb on this repo's
+      # releases/latest. See debian/build-deb.sh.
+      - name: Build .deb packages
+        run: |
+          set -euo pipefail
+          # Pin the changelog date to the commit being built so a rebuild of a
+          # tag is byte-identical.
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          for arch in amd64 arm64 armhf; do
+            echo "::group::deb $arch"
+            debian/build-deb.sh "${{ steps.tag.outputs.version }}" "$arch" dist
+            echo "::endgroup::"
+          done
+
+      - name: Verify .deb contents
+        run: |
+          set -euo pipefail
+          for deb in dist/*.deb; do
+            echo "::group::$(basename "$deb")"
+            dpkg-deb --info "$deb"
+            # Capture the listing once: piping dpkg-deb into `grep -q` SIGPIPEs it,
+            # which pipefail turns into a failure.
+            listing="$(dpkg-deb --contents "$deb")"
+            echo "$listing"
+            grep -q 'usr/lib/packet-term/packet-term$' <<<"$listing"
+            grep -q 'usr/bin/packet-term ->' <<<"$listing"
+            grep -q 'usr/share/doc/packet-term/copyright$' <<<"$listing"
+            echo "::endgroup::"
+          done
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
@@ -83,3 +113,25 @@ jobs:
           name: Packet.Term ${{ steps.tag.outputs.tag }}
           generate_release_notes: true
           files: dist/*
+
+      - name: Tell the apt repo to rebuild
+        # Last, and only after the GitHub Release has succeeded: packet-net/apt
+        # indexes whatever is on releases/latest when it runs, so dispatching
+        # before the assets exist would just re-index the previous release.
+        #
+        # A HARD requirement, not fire-and-forget (Tom, 2026-09-18, same as the
+        # other packet-net repos): if this can't notify packet-net/apt the
+        # release shows red rather than shipping with apt quietly stale until
+        # its daily self-heal rebuild.
+        env:
+          GH_TOKEN: ${{ secrets.APT_DISPATCH_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::APT_DISPATCH_TOKEN is not visible to this repo - cannot notify packet-net/apt"
+            exit 1
+          fi
+          # --input with a JSON body: gh's -f doesn't nest client_payload[...].
+          payload=$(printf '{"event_type":"release-published","client_payload":{"repo":"%s","tag":"%s"}}' \
+            "$GITHUB_REPOSITORY" "$TAG")
+          printf '%s' "$payload" | gh api -X POST repos/packet-net/apt/dispatches --input -
