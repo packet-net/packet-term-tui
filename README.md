@@ -83,4 +83,4 @@ Extracted from `m0lte/packet.net` on 2026-05-17 (history preserved via `git filt
 
 ## License
 
-[MIT](LICENSE).
+[GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).

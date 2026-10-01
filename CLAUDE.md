@@ -56,9 +56,9 @@ tests/Packet.Term.Tests/            library-agnostic unit tests
 
 Every workflow job MUST target `[self-hosted, Linux, X64]`. No GitHub-hosted-runner budget. Same rule as the other repos in this constellation. The runner registered against this repo runs jobs for it; if CI sits queued for >5 minutes, check that the runner is online before assuming anything else is wrong.
 
-### Repo is private
+### Repo is public; licence is AGPL-3.0
 
-`m0lte/packet-term-tui` is private (not because the code is sensitive — it's MIT-licensed, runs against an MIT-licensed library stack — but because self-hosted runners + public repo = fork-PR attack surface, and we haven't decided on the long-term runner story yet). Don't flip to public without checking with Tom.
+`packet-net/packet-term-tui` is public, intentionally — don't make it private. It's licensed AGPL-3.0 (see `LICENSE`); keep `README.md`, `PackageLicenseExpression` in `Directory.Build.props`, the About box in `MainWindow.cs` and `debian/copyright` saying the same.
 
 ## Things to avoid
 

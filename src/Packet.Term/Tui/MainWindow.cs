@@ -483,7 +483,7 @@ internal sealed class MainWindow : Window
             "over a KISS modem — USB serial or KISS over TCP.\n" +
             "\n" +
             "Built on @packet-net/ax25 and Terminal.Gui v2.\n" +
-            "MIT licence.\n" +
+            "AGPL-3.0 licence.\n" +
             "\n" +
             "https://github.com/m0lte/packet.net";
         MessageBox.Query(app, "About Packet.Term", body, "OK");
