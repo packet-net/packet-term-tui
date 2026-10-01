@@ -50,8 +50,14 @@ internal sealed class MainWindow : Window
     private RingBuffer frameLog = new(FrameLogCapacity);
     private RingBuffer chatLog = new(ChatLogCapacity);
 
+    // Terminal.Gui 2.5 obsoletes TextView in favour of tui-cs/Editor's
+    // EditorView. TextView still works and these panes are read-only logs,
+    // so stay put rather than take on another dependency (and re-eyeball
+    // every scheme) for features neither pane uses.
+#pragma warning disable CS0618
     private readonly TextView monitorView;
     private readonly TextView chatView;
+#pragma warning restore CS0618
     private readonly TextField inputField;
     private readonly Shortcut statusIdentity;
     private readonly Shortcut statusPort;
@@ -95,7 +101,9 @@ internal sealed class MainWindow : Window
             Width = Dim.Fill(),
             Height = Dim.Percent(40),
         };
+#pragma warning disable CS0618 // see field declarations
         monitorView = new TextView
+#pragma warning restore CS0618
         {
             X = 0,
             Y = 0,
@@ -124,7 +132,9 @@ internal sealed class MainWindow : Window
             // remaining lines minus that fixed footer.
             Height = Dim.Fill(2),
         };
+#pragma warning disable CS0618 // see field declarations
         chatView = new TextView
+#pragma warning restore CS0618
         {
             X = 0,
             Y = 0,
