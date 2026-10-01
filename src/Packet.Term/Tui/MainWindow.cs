@@ -482,10 +482,10 @@ internal sealed class MainWindow : Window
             "An AX.25 terminal application for connected-mode sessions\n" +
             "over a KISS modem — USB serial or KISS over TCP.\n" +
             "\n" +
-            "Built on @packet-net/ax25 and Terminal.Gui v2.\n" +
-            "MIT licence.\n" +
+            "Built on the Packet.NET libraries and Terminal.Gui v2.\n" +
+            "AGPL-3.0 licence.\n" +
             "\n" +
-            "https://github.com/m0lte/packet.net";
+            "https://github.com/packet-net/packet-term-tui";
         MessageBox.Query(app, "About Packet.Term", body, "OK");
     }
 

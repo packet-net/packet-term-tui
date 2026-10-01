@@ -23,9 +23,9 @@
     <Authors>Tom Fanning M0LTE and Packet.NET contributors</Authors>
     <Company>Packet.NET</Company>
     <Copyright>Copyright © 2026 Tom Fanning and Packet.NET contributors</Copyright>
-    <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/m0lte/packet.net</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/m0lte/packet.net</RepositoryUrl>
+    <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/packet-net/packet-term-tui</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/packet-net/packet-term-tui</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
 
     <PackageReadmeFile Condition="Exists('$(MSBuildProjectDirectory)/README.md')">README.md</PackageReadmeFile>

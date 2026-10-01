@@ -3,7 +3,7 @@ name: deps
 # Weekly Packet.NET dependency sweep.
 #
 # Checks nuget.org for newer stable releases of our own libraries — the Packet.*
-# and M0lte.* packages (m0lte/packet.net, and m0lte/ax25sdl underneath it). If
+# and M0lte.* packages (packet-net/packet.net, and packet-net/ax25sdl underneath it). If
 # anything moved, it bumps Directory.Packages.props, builds and tests, and only if
 # that is green does it commit to main, tag the next patch version, and hand off
 # to release.yml to cut the GitHub Release.

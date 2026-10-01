@@ -1,12 +1,12 @@
 # CLAUDE.md
 
-Operating notes for Claude Code (and other agents) working in `m0lte/packet-term-tui`.
+Operating notes for Claude Code (and other agents) working in `packet-net/packet-term-tui`.
 
 ## What this repo is
 
-`Packet.Term` — the .NET Terminal.Gui v2 TUI for AX.25 connected-mode sessions over a KISS modem, reached over USB serial or over TCP (same `--port` / `--tcp` pair as `m0lte/axcall`). Single-purpose desktop app, talks to one modem, drives one session at a time. Built on the [Packet.NET libraries](https://github.com/m0lte/packet.net) (`Packet.Core`, `Packet.Ax25`, `Packet.Kiss`) consumed as NuGet packages.
+`Packet.Term` — the .NET Terminal.Gui v2 TUI for AX.25 connected-mode sessions over a KISS modem, reached over USB serial or over TCP (same `--port` / `--tcp` pair as `axcall` in `packet-net/pdn-ax25-tools`). Single-purpose desktop app, talks to one modem, drives one session at a time. Built on the [Packet.NET libraries](https://github.com/packet-net/packet.net) (`Packet.Core`, `Packet.Ax25`, `Packet.Kiss`) consumed as NuGet packages.
 
-Extracted from `m0lte/packet.net` on 2026-05-17 with `git filter-repo --path src/Packet.Term/ --path tests/Packet.Term.Tests/ --path LICENSE --path Directory.Build.props --path Directory.Packages.props --path global.json --path .gitignore` so it can have its own release cadence + issue tracker.
+Extracted from `m0lte/packet.net` (now `packet-net/packet.net`) on 2026-05-17 with `git filter-repo --path src/Packet.Term/ --path tests/Packet.Term.Tests/ --path LICENSE --path Directory.Build.props --path Directory.Packages.props --path global.json --path .gitignore` so it can have its own release cadence + issue tracker.
 
 ## Common commands
 
@@ -50,25 +50,25 @@ tests/Packet.Term.Tests/            library-agnostic unit tests
 
 ### Library boundary
 
-`SessionRunner.cs` / `FrameFormatter.cs` / `ModemEndpoint.cs` consume the published Packet.NET libraries — the modems themselves (`KissSerialModem`, `KissTcpClient`) come from `Packet.Kiss.Serial` / `Packet.Kiss`, and everything downstream of the open sees only the neutral `IAx25Transport` seam. Don't reimplement what those libraries already provide — `Ax25Listener`, the SDL session machine, KISS framing, the AX.25 frame codec, the per-peer session cache. If you find yourself wanting to, the right move is to upstream a change to `m0lte/packet.net` instead.
+`SessionRunner.cs` / `FrameFormatter.cs` / `ModemEndpoint.cs` consume the published Packet.NET libraries — the modems themselves (`KissSerialModem`, `KissTcpClient`) come from `Packet.Kiss.Serial` / `Packet.Kiss`, and everything downstream of the open sees only the neutral `IAx25Transport` seam. Don't reimplement what those libraries already provide — `Ax25Listener`, the SDL session machine, KISS framing, the AX.25 frame codec, the per-peer session cache. If you find yourself wanting to, the right move is to upstream a change to `packet-net/packet.net` instead.
 
 ### Self-hosted runners
 
 Every workflow job MUST target `[self-hosted, Linux, X64]`. No GitHub-hosted-runner budget. Same rule as the other repos in this constellation. The runner registered against this repo runs jobs for it; if CI sits queued for >5 minutes, check that the runner is online before assuming anything else is wrong.
 
-### Repo is private
+### Repo is public; licence is AGPL-3.0
 
-`m0lte/packet-term-tui` is private (not because the code is sensitive — it's MIT-licensed, runs against an MIT-licensed library stack — but because self-hosted runners + public repo = fork-PR attack surface, and we haven't decided on the long-term runner story yet). Don't flip to public without checking with Tom.
+`packet-net/packet-term-tui` is public, intentionally — don't make it private. It's licensed AGPL-3.0 (see `LICENSE`); keep `README.md`, `PackageLicenseExpression` in `Directory.Build.props`, the About box in `MainWindow.cs` and `debian/copyright` saying the same.
 
 ## Things to avoid
 
-- Don't add a direct dependency on `Packet.Ax25.Sdl` — it's pulled transitively via `Packet.Ax25` (NuGet from `m0lte/ax25sdl`). The TUI doesn't `using` any Sdl types; the library hides them. `Packet.Ax25.Transport.Abstractions` is the exception that proves the rule: it's also transitive via `Packet.Ax25`, but referenced directly because `ModemEndpoint` / `SessionRunner` name `IAx25Transport` in their own signatures (same as `m0lte/axcall`).
+- Don't add a direct dependency on `Packet.Ax25.Sdl` — it's pulled transitively via `Packet.Ax25` (NuGet from `packet-net/ax25sdl`). The TUI doesn't `using` any Sdl types; the library hides them. `Packet.Ax25.Transport.Abstractions` is the exception that proves the rule: it's also transitive via `Packet.Ax25`, but referenced directly because `ModemEndpoint` / `SessionRunner` name `IAx25Transport` in their own signatures (same as `axcall` in `packet-net/pdn-ax25-tools`).
 - Don't leave `VisualRole.Editable` / `VisualRole.ReadOnly` unset when adding a scheme in `TuiSchemes.cs`. `TextField` paints its *content* with those roles, not `Normal`, and Terminal.Gui **derives** any role you don't set — the derivation of white-on-black is grey-on-grey, which had the conversation pane rendering every line invisibly (fixed 2026-09-08). This can't be unit-tested here: Terminal.Gui's module initializer throws a `TypeLoadException` inside the VSTest host, which is why `tests/` stays library-agnostic. Eyeball the panes after touching schemes. The monitor / conversation panes are `Terminal.Gui.Editor.Editor` (`TextView` is obsolete as of Terminal.Gui 2.5), which paints content with `Normal` and selection with `Active` — keep both explicit for those two schemes.
 - Don't drop `UndoStack.SizeLimit = 0` from `MainWindow.CreateLogPane`. The panes re-set their whole `Text` on every update, and `Editor` records each one as an undoable edit; with the default unbounded stack every update pins a full copy of the previous log.
 - Don't extend `SessionRunner` with multi-session support. The TUI is single-session by design. The library *supports* multi-session via `Ax25Listener.SessionAccepted`; a future per-session-tabs version of the TUI would build on that, but not in this codebase yet.
 - Don't break the boot flow's `Console.ReadLine` prompts. They run BEFORE `Terminal.Gui` takes the screen — flipping them to TUI dialogs would mean the user can't see modem-open errors at startup (TUI is already swallowing the screen by then).
-- Don't add features that need web servers / databases. This is a single-binary desktop app talking to one modem. The one network thing it does is dial a KISS-over-TCP listener (`--tcp`, via `KissTcpClient`) — it never listens on a socket itself. The packet *node* (which does those things) lives elsewhere in `m0lte/packet.net`.
+- Don't add features that need web servers / databases. This is a single-binary desktop app talking to one modem. The one network thing it does is dial a KISS-over-TCP listener (`--tcp`, via `KissTcpClient`) — it never listens on a socket itself. The packet *node* (which does those things) lives elsewhere in `packet-net/packet.net`.
 
 ## When in doubt
 
-Ask Tom. For library-shaped concerns, the right place to raise them is `m0lte/packet.net` (the libraries' source repo), not here.
+Ask Tom. For library-shaped concerns, the right place to raise them is `packet-net/packet.net` (the libraries' source repo), not here.

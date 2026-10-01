@@ -109,7 +109,7 @@ public sealed class SessionRunner : IDisposable
         {
             MyCall = myCall,
             // Set explicitly, never inherited — the same policy as
-            // m0lte/axcall's SessionRelay, so Packet.Term's on-air
+            // axcall's SessionRelay (packet-net/pdn-ax25-tools), so Packet.Term's on-air
             // behaviour is its own and doesn't drift with whichever
             // Packet.Ax25 version it's pinned to. The library's defaults
             // (30 s T3, SABME-first dial) don't suit a terminal on a

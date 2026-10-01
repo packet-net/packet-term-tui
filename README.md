@@ -60,27 +60,27 @@ While connected, typing in the input line and pressing Enter sends one I-frame. 
 
 ## Built on
 
-Downstream consumer of the [Packet.NET libraries](https://github.com/m0lte/packet.net), all pulled from NuGet:
+Downstream consumer of the [Packet.NET libraries](https://github.com/packet-net/packet.net), all pulled from NuGet:
 
 - [`Packet.Core`](https://www.nuget.org/packages/Packet.Core) — shared primitives.
-- [`Packet.Ax25`](https://www.nuget.org/packages/Packet.Ax25) — AX.25 v2.2 codec + session machine + `Ax25Listener`. Transitively pulls [`Packet.Ax25.Sdl`](https://www.nuget.org/packages/Packet.Ax25.Sdl) from [`m0lte/ax25sdl`](https://github.com/m0lte/ax25sdl).
+- [`Packet.Ax25`](https://www.nuget.org/packages/Packet.Ax25) — AX.25 v2.2 codec + session machine + `Ax25Listener`. Transitively pulls [`Packet.Ax25.Sdl`](https://www.nuget.org/packages/Packet.Ax25.Sdl) from [`packet-net/ax25sdl`](https://github.com/packet-net/ax25sdl).
 - [`Packet.Kiss`](https://www.nuget.org/packages/Packet.Kiss) — KISS framing + ACKMODE + transports.
 - `Terminal.Gui` v2 — Turbo Vision-style TUI framework.
 
 ## Provenance
 
-Extracted from `m0lte/packet.net` on 2026-05-17 (history preserved via `git filter-repo`) — the TUI used to live at `src/Packet.Term/` in that monorepo. Now an independent .NET application that consumes the Packet.* libraries from NuGet rather than living alongside them.
+Extracted from `m0lte/packet.net` (now `packet-net/packet.net`) on 2026-05-17 (history preserved via `git filter-repo`) — the TUI used to live at `src/Packet.Term/` in that monorepo. Now an independent .NET application that consumes the Packet.* libraries from NuGet rather than living alongside them.
 
 ## Sibling repos
 
 | Repo | What it is |
 | --- | --- |
-| **`m0lte/packet-term-tui`** *(here)* | C# Terminal.Gui v2 TUI |
-| [`m0lte/packet-term-web`](https://github.com/m0lte/packet-term-web) | Browser TNC2 emulator — same idea on the desktop, at https://packet-term.m0lte.uk |
-| [`m0lte/packet.net`](https://github.com/m0lte/packet.net) | .NET libraries (`Packet.Core` / `Packet.Ax25` / `Packet.Kiss`) — published to NuGet, consumed here |
-| [`m0lte/ax25sdl`](https://github.com/m0lte/ax25sdl) | SDL transcriptions + codegen — transitively consumed via `Packet.Ax25` → `Packet.Ax25.Sdl` |
-| [`m0lte/ax25-ts`](https://github.com/m0lte/ax25-ts) | TypeScript counterpart to `Packet.Ax25` — irrelevant to this app but part of the family |
+| **`packet-net/packet-term-tui`** *(here)* | C# Terminal.Gui v2 TUI |
+| [`packet-net/pdn-web`](https://github.com/packet-net/pdn-web) | Browser TNC2 emulator — same idea on the desktop, at https://packet-term.m0lte.uk |
+| [`packet-net/packet.net`](https://github.com/packet-net/packet.net) | .NET libraries (`Packet.Core` / `Packet.Ax25` / `Packet.Kiss`) — published to NuGet, consumed here |
+| [`packet-net/ax25sdl`](https://github.com/packet-net/ax25sdl) | SDL transcriptions + codegen — transitively consumed via `Packet.Ax25` → `Packet.Ax25.Sdl` |
+| [`packet-net/ax25-ts`](https://github.com/packet-net/ax25-ts) | TypeScript counterpart to `Packet.Ax25` — irrelevant to this app but part of the family |
 
 ## License
 
-[MIT](LICENSE).
+[GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0).
