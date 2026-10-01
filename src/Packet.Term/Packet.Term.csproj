@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <PackageReference Include="Terminal.Gui" />
+    <PackageReference Include="Terminal.Gui.Editor" />
     <PackageReference Include="CommandLineParser" />
     <PackageReference Include="System.IO.Ports" />
     <PackageReference Include="Microsoft.Extensions.Configuration" />

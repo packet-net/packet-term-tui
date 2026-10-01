@@ -6,6 +6,7 @@ using Packet.Ax25.Transport;
 using Packet.Core;
 using Terminal.Gui.App;
 using Terminal.Gui.Drawing;
+using Terminal.Gui.Editor;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
@@ -50,8 +51,8 @@ internal sealed class MainWindow : Window
     private RingBuffer frameLog = new(FrameLogCapacity);
     private RingBuffer chatLog = new(ChatLogCapacity);
 
-    private readonly TextView monitorView;
-    private readonly TextView chatView;
+    private readonly Editor monitorView;
+    private readonly Editor chatView;
     private readonly TextField inputField;
     private readonly Shortcut statusIdentity;
     private readonly Shortcut statusPort;
@@ -95,22 +96,7 @@ internal sealed class MainWindow : Window
             Width = Dim.Fill(),
             Height = Dim.Percent(40),
         };
-        monitorView = new TextView
-        {
-            X = 0,
-            Y = 0,
-            Width = Dim.Fill(),
-            Height = Dim.Fill(),
-            ReadOnly = true,
-            Multiline = true,
-            // Wrapped, not clipped: neither pane can be focused, so there
-            // is no way to scroll sideways to reach whatever a clipped
-            // line hid. Trace headers are short enough that only long
-            // payload rows wrap.
-            WordWrap = true,
-            CanFocus = false,
-        };
-        monitorView.SchemeName = TuiSchemes.Monitor;
+        monitorView = CreateLogPane(TuiSchemes.Monitor);
         monitorFrame.Add(monitorView);
 
         // ─── Conversation (middle, fills above the input + status) ────
@@ -124,18 +110,7 @@ internal sealed class MainWindow : Window
             // remaining lines minus that fixed footer.
             Height = Dim.Fill(2),
         };
-        chatView = new TextView
-        {
-            X = 0,
-            Y = 0,
-            Width = Dim.Fill(),
-            Height = Dim.Fill(),
-            ReadOnly = true,
-            Multiline = true,
-            WordWrap = true,
-            CanFocus = false,
-        };
-        chatView.SchemeName = TuiSchemes.Chat;
+        chatView = CreateLogPane(TuiSchemes.Chat);
         chatFrame.Add(chatView);
 
         // ─── Input line (one row above status) ────────────────────────
@@ -559,11 +534,7 @@ internal sealed class MainWindow : Window
     {
         var stamped = $"[{DateTimeOffset.Now.LocalDateTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture)}] {line}";
         chatLog.Add(stamped);
-        app.Invoke(() =>
-        {
-            chatView.Text = string.Join("\n", chatLog.Snapshot());
-            chatView.MoveEnd();
-        });
+        app.Invoke(() => ShowLog(chatView, chatLog));
     }
 
     // A peer line that was segmented across frames: join the tail onto the
@@ -572,11 +543,7 @@ internal sealed class MainWindow : Window
     private void AppendChatContinuation(string text)
     {
         chatLog.AppendToLast(text);
-        app.Invoke(() =>
-        {
-            chatView.Text = string.Join("\n", chatLog.Snapshot());
-            chatView.MoveEnd();
-        });
+        app.Invoke(() => ShowLog(chatView, chatLog));
     }
 
     private void AppendFrameLine(string line)
@@ -585,11 +552,41 @@ internal sealed class MainWindow : Window
         {
             frameLog.Add(sub);
         }
-        app.Invoke(() =>
+        app.Invoke(() => ShowLog(monitorView, frameLog));
+    }
+
+    // Both panes are read-only displays of a RingBuffer, re-rendered whole
+    // on every update.
+    private static Editor CreateLogPane(string schemeName)
+    {
+        var pane = new Editor
         {
-            monitorView.Text = string.Join("\n", frameLog.Snapshot());
-            monitorView.MoveEnd();
-        });
+            X = 0,
+            Y = 0,
+            Width = Dim.Fill(),
+            Height = Dim.Fill(),
+            ReadOnly = true,
+            Multiline = true,
+            // Wrapped, not clipped: neither pane can be focused, so there
+            // is no way to scroll sideways to reach whatever a clipped
+            // line hid. Trace headers are short enough that only long
+            // payload rows wrap.
+            WordWrap = true,
+            CanFocus = false,
+            SchemeName = schemeName,
+        };
+        // Every refresh replaces the whole document, and Editor records
+        // that on its undo stack — unbounded by default, so each update
+        // would pin a full copy of the previous log. Nothing can undo here.
+        pane.Document!.UndoStack.SizeLimit = 0;
+        return pane;
+    }
+
+    private static void ShowLog(Editor pane, RingBuffer log)
+    {
+        pane.Text = string.Join("\n", log.Snapshot());
+        // Setting the caret scrolls it into view, keeping the newest line visible.
+        pane.CaretOffset = pane.Document!.TextLength;
     }
 
     private void UpdateStatusBar()

@@ -15,18 +15,17 @@ namespace Packet.Term.Tui;
 /// <c>Base</c> / <c>Dialog</c> / <c>Menu</c> entries. The colour choice
 /// is deliberately cool (cyan-on-dark) for the monitor and warmer
 /// (white-on-dark with green accent) for the chat. Direction markers in
-/// the monitor (T / R) are coloured by injecting ANSI-style runs at the
-/// view level — Terminal.Gui's <see cref="Terminal.Gui.Views.TextView"/>
-/// doesn't support per-line colouring directly, so we lean on the
-/// scheme for the global palette and accept BPQ-monitor-style
-/// uniformity within each pane.
+/// the monitor (T / R) are not coloured: the panes are plain
+/// <see cref="Terminal.Gui.Editor.Editor"/> views with no line
+/// transformers, so we lean on the scheme for the global palette and
+/// accept BPQ-monitor-style uniformity within each pane.
 /// </remarks>
 internal static class TuiSchemes
 {
-    /// <summary>Scheme name applied to the frame-monitor TextView.</summary>
+    /// <summary>Scheme name applied to the frame-monitor Editor.</summary>
     public const string Monitor = "PacketTerm.Monitor";
 
-    /// <summary>Scheme name applied to the conversation TextView.</summary>
+    /// <summary>Scheme name applied to the conversation Editor.</summary>
     public const string Chat = "PacketTerm.Chat";
 
     /// <summary>Scheme name applied to the input line TextField.</summary>
@@ -53,17 +52,17 @@ internal static class TuiSchemes
         // (Color.Cyan1 panel title + dimmed body).
         var normal = new TguiAttribute(Color.Cyan, Color.Black);
         var focus = new TguiAttribute(Color.BrightCyan, Color.Black);
-        return Build(normal, focus);
+        return Build(normal, focus) with { Active = Inverse(normal) };
     }
 
     private static Scheme BuildChat()
     {
         // Warmer palette: light-on-dark. The "*** ..." sentinel lines used
-        // to be yellow under Spectre; we lose per-line tinting under
-        // TextView but keep the warm overall feel via the foreground.
+        // to be yellow under Spectre; we lose per-line tinting in a
+        // single-scheme pane but keep the warm overall feel via the foreground.
         var normal = new TguiAttribute(Color.White, Color.Black);
         var focus = new TguiAttribute(Color.BrightYellow, Color.Black);
-        return Build(normal, focus);
+        return Build(normal, focus) with { Active = Inverse(normal) };
     }
 
     private static Scheme BuildInput()
@@ -93,9 +92,11 @@ internal static class TuiSchemes
         // doesn't fall through to a parent scheme.
         //
         // Editable / ReadOnly are the two that MUST be spelled out here:
-        // TextView and TextField paint their content with those roles, not
-        // with Normal, and a role left unset is *derived* by Terminal.Gui
-        // rather than inherited. The derivation from White-on-Black lands
+        // TextField paints its content with those roles, not with Normal,
+        // and a role left unset is *derived* by Terminal.Gui rather than
+        // inherited. (The display panes are Editor views, which paint
+        // content with Normal and selection with Active — their builders
+        // set Active on top of this.) The derivation from White-on-Black lands
         // on Gray-on-Gray — which is how the conversation pane spent its
         // life rendering white text invisibly on a grey block. Both panes
         // are read-only by design (they're displays, not fields), so their
@@ -111,4 +112,8 @@ internal static class TuiSchemes
             Disabled = new TguiAttribute(Color.DarkGray, Color.Black),
         };
     }
+
+    // Selection highlight for the Editor panes. Panes can't take focus, but
+    // a mouse drag still selects — keep that legible rather than derived.
+    private static TguiAttribute Inverse(TguiAttribute a) => new(a.Background, a.Foreground);
 }

@@ -9,25 +9,28 @@
     <!-- Packet.NET libraries — consumed from m0lte/packet.net as NuGet
          packages since 2026-05-17. Packet.Ax25 brings Packet.Ax25.Sdl
          transitively (which itself comes from m0lte/ax25sdl). -->
-    <PackageVersion Include="Packet.Core" Version="0.53.0" />
-    <PackageVersion Include="Packet.Ax25" Version="0.53.0" />
+    <PackageVersion Include="Packet.Core" Version="0.54.0" />
+    <PackageVersion Include="Packet.Ax25" Version="0.54.0" />
     <!-- IAx25Transport — the neutral modem seam. Pulled in transitively by
          Packet.Ax25 anyway; referenced directly because Packet.Term names the
          type in its own signatures (ModemEndpoint / SessionRunner). -->
-    <PackageVersion Include="Packet.Ax25.Transport.Abstractions" Version="0.53.0" />
-    <PackageVersion Include="Packet.Kiss" Version="0.53.0" />
-    <PackageVersion Include="Packet.Kiss.Serial" Version="0.53.0" />
+    <PackageVersion Include="Packet.Ax25.Transport.Abstractions" Version="0.54.0" />
+    <PackageVersion Include="Packet.Kiss" Version="0.54.0" />
+    <PackageVersion Include="Packet.Kiss.Serial" Version="0.54.0" />
 
     <!-- TUI runtime + CLI parsing + JSON-settings + serial. -->
-    <PackageVersion Include="Terminal.Gui" Version="2.1.0" />
+    <PackageVersion Include="Terminal.Gui" Version="2.5.0" />
+    <!-- Editor view for the monitor / conversation panes; supersedes TG TextView
+         (obsolete as of Terminal.Gui 2.5). Same maintainer as Terminal.Gui. -->
+    <PackageVersion Include="Terminal.Gui.Editor" Version="2.5.7" />
     <PackageVersion Include="CommandLineParser" Version="2.9.1" />
-    <!-- 10.0.11, not 10.0.0: Packet.Kiss.Serial 0.26.0 floors System.IO.Ports at
+    <!-- 10.0.12 (>= 10.0.11), not 10.0.0: Packet.Kiss.Serial 0.26.0 floors System.IO.Ports at
          >= 10.0.11 (packet.net bumped its .NET 10 servicing set on 2026-08-16), and
          CPM turns a lower central pin into an NU1109 downgrade error. -->
-    <PackageVersion Include="System.IO.Ports" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.0" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.0" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.0" />
+    <PackageVersion Include="System.IO.Ports" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.12" />
 
     <!-- Testing. -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
