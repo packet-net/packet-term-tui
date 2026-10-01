@@ -1,0 +1,19 @@
+packet-term - terminal UI for AX.25 connected-mode sessions over a KISS modem
+https://github.com/packet-net/packet-term-tui
+
+Copyright (c) 2026 Tom Fanning M0LTE and Packet.NET contributors
+
+This package ships a single self-contained executable that bundles the
+Packet.Term code, its .NET dependencies and the .NET runtime.
+
+LICENCE
+-------
+
+Packet.Term is licensed under the GNU Affero General Public License, version 3.
+The full text is in /usr/share/doc/packet-term/LICENSE.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE.  See the GNU Affero General Public License for more details.
+
+The bundled .NET runtime and libraries are MIT-licensed by the .NET Foundation.
