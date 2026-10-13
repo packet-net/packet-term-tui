@@ -90,14 +90,16 @@ chmod 0644 "$STAGE/root$DOCDIR/changelog.Debian.gz"
 INSTALLED_SIZE="$(du -k -s --exclude=DEBIAN "$STAGE/root" | cut -f1)"
 
 # libicu: the build is globalization-enabled (as the standalone binaries are), and .NET refuses
-# to start without ICU. Same alternatives list as dapps on the apt repo.
+# to start without ICU. Same alternatives list as dapps on the apt repo. It runs ahead of what
+# any distro ships today: Ubuntu 26.04 moved to libicu78, and a list that stopped at 76 left apt
+# with no installable choice (packet-net/dapps#232). apt skips names that do not exist yet.
 cat > "$STAGE/root/DEBIAN/control" <<EOF
 Package: packet-term
 Version: $VERSION
 Architecture: $ARCH
 Maintainer: Tom Fanning M0LTE <tom@m0lte.uk>
 Installed-Size: $INSTALLED_SIZE
-Depends: libc6, libgcc-s1, libstdc++6, libicu76 | libicu74 | libicu72 | libicu71 | libicu70 | libicu69 | libicu68 | libicu67 | libicu66 | libicu63
+Depends: libc6, libgcc-s1, libstdc++6, libicu80 | libicu79 | libicu78 | libicu77 | libicu76 | libicu74 | libicu72 | libicu71 | libicu70 | libicu69 | libicu68 | libicu67 | libicu66 | libicu63
 Section: hamradio
 Priority: optional
 Homepage: https://github.com/packet-net/packet-term-tui
