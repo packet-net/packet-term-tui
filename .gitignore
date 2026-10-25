@@ -77,3 +77,4 @@ web/ax25/dist/
 # the output so a stray invocation doesn't leave untracked artefacts in
 # the working tree. C# codegen now lives in m0lte/ax25sdl.
 src/Packet.Ax25.Sdl/
+__pycache__/
