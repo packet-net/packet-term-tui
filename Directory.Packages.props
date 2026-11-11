@@ -27,16 +27,16 @@
     <!-- 10.0.12 (>= 10.0.11), not 10.0.0: Packet.Kiss.Serial 0.26.0 floors System.IO.Ports at
          >= 10.0.11 (packet.net bumped its .NET 10 servicing set on 2026-08-16), and
          CPM turns a lower central pin into an NU1109 downgrade error. -->
-    <PackageVersion Include="System.IO.Ports" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.12" />
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.12" />
+    <PackageVersion Include="System.IO.Ports" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Json" Version="10.0.15" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.15" />
 
     <!-- Testing. -->
-    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.2" />
     <PackageVersion Include="xunit" Version="2.9.3" />
-    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
-    <PackageVersion Include="AwesomeAssertions" Version="9.2.0" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="AwesomeAssertions" Version="9.6.0" />
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
 
     <!-- Build housekeeping (sourcelink). -->
